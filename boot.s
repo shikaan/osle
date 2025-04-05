@@ -60,10 +60,12 @@ shell:
   fn_start
     mov di, 0
     call set_cursor
-    mov di, '$'
-    call put_char
-    mov di, 2
-    call move_cursor
+    
+    .print_prompt:
+      mov di, '$'
+      call put_char
+      mov di, 2
+      call move_cursor
 
     .loop:
       call get_key
@@ -74,7 +76,11 @@ shell:
       jne .print_char
 
     .print_char:
-      mov di, ax
+      push ax
+      mov di, input
+      mov si, ax
+      call str_append
+      pop di
       call put_char
       mov di, 1
       call move_cursor
@@ -82,13 +88,20 @@ shell:
       jmp .loop
 
     .enter:
-      jmp .break
+      call return_cursor
+      mov di, input
+      mov si, [input + 1]
+      call print
+      call return_cursor
+      jmp .print_prompt
 
     .backspace:
       mov di, -1
       call move_cursor
       mov di, 0
       call put_char
+      mov di, input
+      call str_pop
       jmp .loop
 
   .break:
@@ -98,17 +111,71 @@ shell:
 ; Keyboard
 ; --------
 
-; get_key(void) -> (ax: u16 key)
-; Waits for a key press and returns the key code in AX.
+; get_key(void) -> (ax: u16 scan_code|key_code)
+; Waits for a key press and returns the key code in al and scan code in ah
 get_key:
+  mov ah, 0x00
+  int 0x16
+  ret
+
+; String
+; ------
+; Strings are buffers prefixed with 2 bytes: capacity and size. The first
+; represents the size of the allocated buffer, the latter how much of it has
+; been used. Strings should never be read beyond the `size` value. 
+
+; str_append(di: u8* string, si: u8 char)
+; Appends a char to a given string
+str_append:
   fn_start
-    mov ah, 0x00
-    int 0x16
+    mov ax, si       ; si is for buffer index, saving value in ax 
+    mov cl, [di + 1] ; save current count to be increased
+
+    xor dx, dx ; store count in si as an index in the buffer
+    mov dl, cl
+    mov si, dx
+
+    ; increase current length and check if we are out of bounds
+    inc cl
+    cmp cl, byte [di]
+    ja .end
+
+    mov byte [di + 1], cl
+    mov bx, di
+    mov byte [bx + si + 2], al
+  .end:
+  fn_end
+
+; str_pop(di: u8* string) -> (ax: u8 char)
+; Pops last byte from a string
+str_pop:
+  fn_start
+    mov cl, [di + 1] ; save current count to be decreased
+
+    cmp cl, 0 ; if the string is empty, you cannot pop
+    je .end
+
+    mov bx, di
+
+    xor dx, dx ; store count in si as an index in the buffer
+    mov dl, cl
+    mov si, dx
+
+    ; save the popped byte in the return register
+    xor ax, ax
+    mov al, byte [bx + si + 2]
+
+    ; clear the popped byte
+    mov byte [bx + si + 2], 0
+
+    ; shorten the string
+    dec cl
+    mov byte [di + 1], cl
+  .end:
   fn_end
 
 ; Cursor
 ; ------
-
 ; set_cursor(di: u16 col_row)
 ; Sets the cursor position on the screen. Low byte is column, high byte is row.
 set_cursor:
@@ -180,14 +247,16 @@ print:
     mov dx, si  ; dx = size
 
   .loop:
-    cmp dl, cl
+    cmp dl, cl            ; did we print everything?
     je .break
-    cmp byte [bx], cl
+    cmp byte [bx], cl     ; are we at the max length of this string?
+    je .break
+    cmp byte [bx + 1], cl ; are we at the used length of this string?
     je .break
     push cx
     push dx
     mov si, cx
-    mov di, [bx + si + 1]
+    mov di, [bx + si + 2]
     call put_char
     mov di, 1
     call move_cursor
@@ -201,10 +270,10 @@ print:
 
 ; Data
 ; ====
-input:  db 0x40
+input:  db 0x40, 0x00
         times 0x40 db 0
 
-output: db 0x40
+output: db 0x40, 0x00
         times 0x40 db 0
 
 times 510-($-$$) db 0
