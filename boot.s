@@ -37,8 +37,7 @@ bits 16
   mov sp, 0x2000  ; stack pointer (stack size = 8k)
 
 .setup_screen:
-  mov ah, 0x00    ; 0x00: Set video mode
-  mov al, 0x03    ; 80x25 text mode, color
+  mov ax, 0x0003    ; 0x00: Set video mode, 80x25 text mode, color
   int 0x10
 
 .main:
@@ -109,10 +108,17 @@ shell:
       jmp .print_prompt
 
     .cmd_error:
-      mov di, ERROR
+      mov si, ERROR
+      mov di, output
+      call str_copy
+      mov di, output
       call str_print
+
+    .cmd_done:
       call cur_return
       mov di, input
+      call str_empty
+      mov di, output
       call str_empty
       jmp .print_prompt
 
@@ -208,6 +214,27 @@ str_print:
     .break:
       frame_end
 
+; str_copy(di: u8 *dest, si: u8 *src) -> void
+; Copies a string entirely from the source into the destination
+str_copy:
+  fn_start
+    mov dl, byte [si + 1] 
+    cmp dl, byte [di]             ; when dest capacity is smaller than src size
+    ja .end                       ; we don't have enough space, so we return
+    mov byte [di + 1], dl
+    xor bx, bx
+
+    .loop:
+      cmp byte [si + 1], bl       
+      je .end
+      mov cl, byte [si + bx + 2]  ; copy the byte
+      mov byte [di + bx + 2], cl
+      inc bx
+      jmp .loop
+
+    .end:
+      fn_end
+
 ; Cursor
 ; ------
 ; cur_set(di: u16 col|row)
@@ -276,13 +303,13 @@ scr_put_char:
 
 ; Data
 ; ====
-input:  db 0x40, 0x00
-        times 0x40 db 0
+input:  db 0x20, 0x00
+        times 0x20 db 0
 
-output: db 0x40, 0x00
-        times 0x40 db 0
+output: db 0x20, 0x00
+        times 0x20 db 0
 
-CLEAR: db 0x5,0x5,"scr_clear"
+CLEAR: db 0x5,0x5,"clear"
 ERROR: db 0x13,0x13,"sh: unknown command"
 
 times 510-($-$$) db 0
