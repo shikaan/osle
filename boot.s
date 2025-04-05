@@ -42,7 +42,7 @@ bits 16
   int 0x10
 
 .main:
-  call clear
+  call scr_clear
   call shell
 
   cli
@@ -57,69 +57,81 @@ bits 16
 ; shell(void)
 ; Launches an interactive command prompt, the entry point of our real-mode OS.
 shell:
-  fn_start
+  mov di, 0
+  call cur_set
+  
+  .print_prompt:
+    mov di, '$'
+    call scr_put_char
+    mov di, 2
+    call cur_move
+
+  .loop:
+    call kbd_get_key
+    cmp al, 0x0D        ; key is ENTER jump to cmd
+    je .cmd
+    cmp al, 0x08        ; key is BACKSPACE
+    je .backspace
+    jne .print_char     ; else, try to print
+
+  .print_char:
+    push ax
+    mov di, input
+    mov si, ax
+    call str_append     ; append new character to the input buffer
+    pop di
+    call scr_put_char   ; write the new character on screen
+    mov di, 1
+    call cur_move       ; move the cursor forward
+    jmp .loop
+
+  .backspace:
+    mov di, -1
+    call cur_move       ; move cursor backwards
     mov di, 0
-    call set_cursor
-    
-    .print_prompt:
-      mov di, '$'
-      call put_char
-      mov di, 2
-      call move_cursor
+    call scr_put_char   ; remove the character from screen
+    mov di, input
+    call str_remove     ; remove character from input buffer
+    jmp .loop
+  
+  .cmd:
+    call cur_return     ; carriage return
+    mov di, input
+    mov si, CLEAR
+    call str_compare    
+    je .cmd_clear       ; command is the builtin clear
+    jmp .cmd_error      ; command is unknown
 
-    .loop:
-      call get_key
-      cmp al, 0x0D
-      je .enter
-      cmp al, 0x08
-      je .backspace
-      jne .print_char
-
-    .print_char:
-      push ax
-      mov di, input
-      mov si, ax
-      call str_append
-      pop di
-      call put_char
-      mov di, 1
-      call move_cursor
-
-      jmp .loop
-
-    .enter:
-      call return_cursor
-      mov di, input
-      mov si, [input + 1]
-      call print
-      call return_cursor
+    .cmd_clear:
+      call scr_clear
+      mov di, 0
+      call cur_set
       jmp .print_prompt
 
-    .backspace:
-      mov di, -1
-      call move_cursor
-      mov di, 0
-      call put_char
+    .cmd_error:
+      mov di, ERROR
+      call str_print
+      call cur_return
       mov di, input
-      call str_pop
-      jmp .loop
+      call str_empty
+      jmp .print_prompt
 
-  .break:
-  fn_end
+  .break: ret
 
 
 ; Keyboard
 ; --------
 
-; get_key(void) -> (ax: u16 scan_code|key_code)
+; kbd_get_key(void) -> (ax: u16 scan_code|key_code)
 ; Waits for a key press and returns the key code in al and scan code in ah
-get_key:
-  mov ah, 0x00
+kbd_get_key:
+  mov ah, 0x00  ; Function 0: Read character
   int 0x16
   ret
 
 ; String
 ; ------
+
 ; Strings are buffers prefixed with 2 bytes: capacity and size. The first
 ; represents the size of the allocated buffer, the latter how much of it has
 ; been used. Strings should never be read beyond the `size` value. 
@@ -128,57 +140,79 @@ get_key:
 ; Appends a char to a given string
 str_append:
   fn_start
-    mov ax, si       ; si is for buffer index, saving value in ax 
-    mov cl, [di + 1] ; save current count to be increased
-
-    xor dx, dx ; store count in si as an index in the buffer
-    mov dl, cl
-    mov si, dx
-
-    ; increase current length and check if we are out of bounds
-    inc cl
-    cmp cl, byte [di]
-    ja .end
-
-    mov byte [di + 1], cl
-    mov bx, di
-    mov byte [bx + si + 2], al
+    mov cl, [di + 1]      ; cl = size
+    cmp cl, [di]          ; compare with capacity
+    jae .end              ; if size >= capacity, return
+    
+    xor bx, bx            ; scr_clear bx
+    mov bl, cl            ; use size as index
+    inc byte [di + 1]     ; increment size
+    mov [di + bx + 2], si ; store char at buffer[index + 2]     
   .end:
-  fn_end
+    fn_end
 
-; str_pop(di: u8* string) -> (ax: u8 char)
-; Pops last byte from a string
-str_pop:
-  fn_start
-    mov cl, [di + 1] ; save current count to be decreased
+; str_remove(di: u8* string)
+; Removes last byte from a string
+str_remove:
+  mov cl, [di + 1]  ; cl = size 
+  cmp cl, 0         ; if size == 0, return
+  je .end 
+  dec byte [di + 1]
+  .end: 
+    ret
 
-    cmp cl, 0 ; if the string is empty, you cannot pop
+; str_empty(di: u8* string)
+; Makes a string empty
+str_empty:
+  mov byte [di + 1], 0
+  ret 
+
+; str_compare(di: u8* string, si: u8* string)
+; Compares two trings setting the Z flag accordingly
+str_compare:
+  mov al, [di + 1]
+  cmp al, [si + 1]              ; if size differs, return (Z=false)
+  jne .end
+  mov bx, 0                     ; bx = counter
+  
+  .loop:
+    mov al, [bx + di + 2]
+    cmp al, [bx + si + 2]       ; if byte differs, return (Z=false)
+    jne .end
+    inc bx
+    cmp bl, byte [di + 1]       ; if counter == size, return (Z=true)
     je .end
+    jmp .loop
 
-    mov bx, di
-
-    xor dx, dx ; store count in si as an index in the buffer
-    mov dl, cl
-    mov si, dx
-
-    ; save the popped byte in the return register
-    xor ax, ax
-    mov al, byte [bx + si + 2]
-
-    ; clear the popped byte
-    mov byte [bx + si + 2], 0
-
-    ; shorten the string
-    dec cl
-    mov byte [di + 1], cl
   .end:
-  fn_end
+    ret
+
+; str_print(di: u8 *string) -> void
+; Prints a string to the screen
+str_print:
+  frame_start
+    mov bx, 0               ; bx = counter
+
+    .loop:
+      cmp byte [di + 1], bl ; if counter == size, return
+      je .break
+      push di               ; save di before rewriting
+      mov di, [di + bx + 2]
+      call scr_put_char
+      mov di, 1
+      call cur_move
+      pop di
+      inc bx
+      jmp .loop
+
+    .break:
+      frame_end
 
 ; Cursor
 ; ------
-; set_cursor(di: u16 col_row)
+; cur_set(di: u16 col|row)
 ; Sets the cursor position on the screen. Low byte is column, high byte is row.
-set_cursor:
+cur_set:
   fn_start
     mov dx, di
     mov ah, 0x02
@@ -186,9 +220,9 @@ set_cursor:
     int 0x10
   fn_end
 
-; get_cursor(void) -> (ax: u16 col_row)
+; cur_get(void) -> (ax: u16 col|row)
 ; Returns the current cursor position.
-get_cursor:
+cur_get:
   fn_start
     mov ah, 0x03
     mov bh, 0x00
@@ -196,29 +230,31 @@ get_cursor:
     mov ax, dx
   fn_end
 
-; move_cursor(di: i8 delta)
+; cur_move(di: i8 delta_col|delta_row)
 ; Moves the cursor in the current page.
-move_cursor:
-  call get_cursor
+cur_move:
+  call cur_get
   add ax, di
   mov di, ax
-  call set_cursor
+  call cur_set
   ret
 
-return_cursor:
-  call get_cursor
-  inc ah ; move one line down
+; cur_return(void)
+; Moves the cursor at the beginning of the next line
+cur_return:
+  call cur_get
+  inc ah        ; move one line down
   mov al, 0
   mov di, ax
-  call set_cursor
+  call cur_set
   ret
 
 ; Screen
 ; ------
 
-; clear(void)
+; scr_clear(void)
 ; Clears the screen and scrolls the window up.
-clear:
+scr_clear:
   fn_start
     mov ax, 0x0600 ; Scroll up and clear window
     mov cx, 0x0000 ; Set top left corner in 0,0
@@ -227,46 +263,16 @@ clear:
     int 0x10
   fn_end
 
-; put_char(di: u8 char) -> void
-; Prints a single character to the screen at the current cursor position.
-put_char:
+; scr_put_char(di: u8 char) -> void
+; Puts a character to the screen at the current cursor position.
+scr_put_char:
   fn_start
     mov ax, di
-    mov ah, 0x0A
-    mov bh, 0x00
-    mov cx, 1
+    mov ah, 0x0A  ; Function 0A: Write character
+    mov bh, 0x00  ; Page 0
+    mov cx, 1     ; How many repetitions?
     int 0x10
   fn_end
-
-; print_string(di: u8 *string, si: u8 size) -> void
-; Prints a length prefixed string, one character at a time.
-print:
-  frame_start
-    mov bx, di  ; bx = buffer
-    mov cx, 0   ; cx = counter
-    mov dx, si  ; dx = size
-
-  .loop:
-    cmp dl, cl            ; did we print everything?
-    je .break
-    cmp byte [bx], cl     ; are we at the max length of this string?
-    je .break
-    cmp byte [bx + 1], cl ; are we at the used length of this string?
-    je .break
-    push cx
-    push dx
-    mov si, cx
-    mov di, [bx + si + 2]
-    call put_char
-    mov di, 1
-    call move_cursor
-    pop dx
-    pop cx
-    inc cx
-    jmp .loop
-
-  .break:
-    frame_end
 
 ; Data
 ; ====
@@ -275,6 +281,9 @@ input:  db 0x40, 0x00
 
 output: db 0x40, 0x00
         times 0x40 db 0
+
+CLEAR: db 0x5,0x5,"scr_clear"
+ERROR: db 0x13,0x13,"sh: unknown command"
 
 times 510-($-$$) db 0
 dw 0xAA55
