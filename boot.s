@@ -1,9 +1,16 @@
+; Calling convention
+;   - max two arguments per function (else stack): di, si;
+;   - function preserves bx;
+;   - invoker preserves ax, cx, dx, di, si;
+;   - ax is the return register;
 %macro fn_start 0
   push bp
   mov bp, sp
+  push bx
 %endmacro
 
 %macro fn_end 0
+  pop bx
   mov sp, bp
   pop bp
   ret
