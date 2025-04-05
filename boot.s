@@ -3,16 +3,25 @@
 ;   - function preserves bx;
 ;   - invoker preserves ax, cx, dx, di, si;
 ;   - ax is the return register;
-%macro fn_start 0
+%macro frame_start 0
   push bp
   mov bp, sp
   push bx
 %endmacro
 
-%macro fn_end 0
+%macro frame_end 0
   pop bx
   mov sp, bp
   pop bp
+  ret
+%endmacro
+
+%macro fn_start 0
+  push bx
+%endmacro
+
+%macro fn_end 0
+  pop bx
   ret
 %endmacro
 
@@ -121,14 +130,21 @@ get_cursor:
   fn_end
 
 ; move_cursor(di: i8 delta)
-; Moves the cursor forward in the current page
+; Moves the cursor in the current page.
 move_cursor:
-  fn_start
-    call get_cursor
-    add ax, di
-    mov di, ax
-    call set_cursor
-  fn_end
+  call get_cursor
+  add ax, di
+  mov di, ax
+  call set_cursor
+  ret
+
+return_cursor:
+  call get_cursor
+  inc ah ; move one line down
+  mov al, 0
+  mov di, ax
+  call set_cursor
+  ret
 
 ; Screen
 ; ------
@@ -158,7 +174,7 @@ put_char:
 ; print_string(di: u8 *string, si: u8 size) -> void
 ; Prints a length prefixed string, one character at a time.
 print:
-  fn_start
+  frame_start
     mov bx, di  ; bx = buffer
     mov cx, 0   ; cx = counter
     mov dx, si  ; dx = size
@@ -181,7 +197,7 @@ print:
     jmp .loop
 
   .break:
-    fn_end
+    frame_end
 
 ; Data
 ; ====
