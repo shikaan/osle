@@ -28,17 +28,17 @@
 bits 16
 
 .setup_memory:
-  mov ax, 0x7C0 ; Data Segment
+  mov ax, 0x7C0   ; data segment
   mov ds, ax
 
-  mov ax, 0x7E0 ; Stack Segment
+  mov ax, 0x7E0   ; stack segment
   mov ss, ax
 
-  mov sp, 0x2000 ; Stack size: 8k (0x2000 is 8192)
+  mov sp, 0x2000  ; stack pointer (stack size = 8k)
 
 .setup_screen:
-  mov ah, 0x00 ; Function 0: Set video mode
-  mov al, 0x03 ; 80x25 text mode, color
+  mov ah, 0x00    ; 0x00: Set video mode
+  mov al, 0x03    ; 80x25 text mode, color
   int 0x10
 
 .main:
@@ -256,10 +256,10 @@ cur_return:
 ; Clears the screen and scrolls the window up.
 scr_clear:
   fn_start
-    mov ax, 0x0600 ; Scroll up and clear window
-    mov cx, 0x0000 ; Set top left corner in 0,0
-    mov dx, 0x184F ; Set bottom right corner in 18,4F
-    mov bh, 0x07   ; Set color for the background
+    mov ax, 0x0600 ; scroll up and clear window
+    mov cx, 0x0000 ; top left corner = 0,0
+    mov dx, 0x184F ; bottom right corner = 18,4F
+    mov bh, 0x07   ; set background color
     int 0x10
   fn_end
 
@@ -268,9 +268,9 @@ scr_clear:
 scr_put_char:
   fn_start
     mov ax, di
-    mov ah, 0x0A  ; Function 0A: Write character
-    mov bh, 0x00  ; Page 0
-    mov cx, 1     ; How many repetitions?
+    mov ah, 0x0A  ; 0A: write character
+    mov bh, 0x00  ; page = 0
+    mov cx, 1     ; how many repetitions?
     int 0x10
   fn_end
 
