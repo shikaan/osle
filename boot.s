@@ -1,7 +1,7 @@
 ; Calling convention
-;   - max two arguments per function (else stack): di, si;
+;   - max two arguments per function (else stack): di, si, dx;
 ;   - function preserves bx;
-;   - invoker preserves ax, cx, dx, di, si;
+;   - invoker preserves ax, cx, di, si;
 ;   - ax is the return register;
 %macro frame_start 0
   push bp
@@ -79,9 +79,7 @@ shell:
     mov si, ax
     call str_append     ; append new character to the input buffer
     pop di
-    call scr_put_char   ; write the new character on screen
-    mov di, 1
-    call cur_move       ; move the cursor forward
+    call scr_teletype   ; write the new character on screen
     jmp .loop
 
   .backspace:
@@ -173,7 +171,7 @@ str_empty:
   mov byte [di + 1], 0
   ret 
 
-; str_compare(di: u8* string, si: u8* string)
+; str_compare(di: u8* string, si: u8* string, dx: u16 start|end)
 ; Compares two trings setting the Z flag accordingly
 str_compare:
   mov al, [di + 1]
@@ -196,23 +194,19 @@ str_compare:
 ; str_print(di: u8 *string) -> void
 ; Prints a string to the screen
 str_print:
-  frame_start
-    mov bx, 0               ; bx = counter
+  fn_start
+    xor cx, cx
+    mov cl, byte [di + 1]         ; counter = string size
 
-    .loop:
-      cmp byte [di + 1], bl ; if counter == size, return
-      je .break
-      push di               ; save di before rewriting
-      mov di, [di + bx + 2]
-      call scr_put_char
-      mov di, 1
-      call cur_move
-      pop di
-      inc bx
-      jmp .loop
-
-    .break:
-      frame_end
+    mov ah, 0x0E                  ; set teletype interrupt
+    mov bh, 0
+    
+    lea si, [di + 2]              ; put buffer pointer in si to use lodsb
+    .print_next:
+      lodsb
+      int 0x10
+      loop .print_next
+  fn_end
 
 ; str_copy(di: u8 *dest, si: u8 *src) -> void
 ; Copies a string entirely from the source into the destination
@@ -237,6 +231,7 @@ str_copy:
 
 ; Cursor
 ; ------
+
 ; cur_set(di: u16 col|row)
 ; Sets the cursor position on the screen. Low byte is column, high byte is row.
 cur_set:
@@ -298,6 +293,16 @@ scr_put_char:
     mov ah, 0x0A  ; 0A: write character
     mov bh, 0x00  ; page = 0
     mov cx, 1     ; how many repetitions?
+    int 0x10
+  fn_end
+
+; scr_put_char(di: u8 char) -> void
+; Puts a character to the screen at the current cursor position and advances
+scr_teletype:
+  fn_start
+    mov ax, di
+    mov ah, 0x0E  ; BIOS teletype function
+    mov bh, 0x00  ; Page number
     int 0x10
   fn_end
 
