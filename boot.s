@@ -93,17 +93,34 @@ shell:
   
   .cmd:
     call cur_return     ; carriage return
+
     mov di, input
     mov si, CLEAR
+    mov dx, 0x0005
     call str_compare    
     je .cmd_clear       ; command is the builtin clear
+    
+    mov di, input
+    mov si, ECHO
+    mov dx, 0x0004
+    call str_compare    
+    je .cmd_echo        ; command is the builtin echo
+    
     jmp .cmd_error      ; command is unknown
 
     .cmd_clear:
       call scr_clear
-      mov di, 0
+      mov di, -1
       call cur_set
-      jmp .print_prompt
+      jmp .cmd_done
+
+    .cmd_echo:
+      mov si, input
+      mov di, output
+      call str_copy
+      mov di, output
+      call str_print
+      jmp .cmd_done
 
     .cmd_error:
       mov si, ERROR
@@ -171,25 +188,27 @@ str_empty:
   mov byte [di + 1], 0
   ret 
 
-; str_compare(di: u8* string, si: u8* string, dx: u16 start|end)
-; Compares two trings setting the Z flag accordingly
+; str_compare(di: u8* string, si: u8* string, dx: u8 count)
+; Compares two strings setting the Z flag accordingly
 str_compare:
-  mov al, [di + 1]
-  cmp al, [si + 1]              ; if size differs, return (Z=false)
-  jne .end
-  mov bx, 0                     ; bx = counter
-  
-  .loop:
-    mov al, [bx + di + 2]
-    cmp al, [bx + si + 2]       ; if byte differs, return (Z=false)
-    jne .end
-    inc bx
-    cmp bl, byte [di + 1]       ; if counter == size, return (Z=true)
-    je .end
-    jmp .loop
+  fn_start
+    cmp dl, byte [di + 1]   ; bound checks
+    ja .end
+    cmp dl, byte [si + 1]
+    ja .end
 
-  .end:
-    ret
+    mov cx, dx
+    xor bx, bx
+    
+    .loop:
+      mov al, [bx + di + 2]
+      cmp al, [bx + si + 2]       ; if byte differs, return (Z=false)
+      jne .end
+      inc bx
+      loop .loop
+      xor ax, ax
+    .end:
+      fn_end
 
 ; str_print(di: u8 *string) -> void
 ; Prints a string to the screen
@@ -315,6 +334,7 @@ output: db 0x20, 0x00
         times 0x20 db 0
 
 CLEAR: db 0x5,0x5,"clear"
+ECHO: db 0x4,0x4,"echo"
 ERROR: db 0x13,0x13,"sh: unknown command"
 
 times 510-($-$$) db 0
