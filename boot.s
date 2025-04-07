@@ -48,13 +48,17 @@ shell:
   je .backspace
   jne .print_char                 ; else, try to print
 
-; TODO: this can overflow.
 .print_char:
-  mov bh, 0
-  mov bl, [input_len]             ; append to input
-  mov byte [input + bx], al
-  mov byte [input + bx + 1], 0    ; null terminate the input
-  inc byte [input_len]
+  mov dl, [INPUT.cap]
+  cmp [INPUT.len], dl
+  jae .wait_for_key               ; nop if the input buffer is full
+
+  mov bh, 0                       ; clear high byte for good measure
+  mov bl, [INPUT.len]             
+  mov di, [INPUT.ptr]
+  mov byte [di + bx], al          ; append char at the end of the buffer
+  mov byte [di + bx + 1], 0       ; null terminate the input
+  inc byte [INPUT.len]            ; inclease size
   
   mov di, ax
   call scr_tty                    ; write the new character on screen
@@ -62,34 +66,41 @@ shell:
   jmp .wait_for_key
 
 .backspace:
+  cmp byte [INPUT.len], 0
+  je .wait_for_key                ; nop if input is empty
+
   mov di, ax                      ; print backspace (move backwards)
   call scr_tty
   
   mov di, 0                       ; delete last char on screen
   call scr_put_char
   
-  mov bx, [input_len]             ; remove last char from input
-  mov byte [input + bx], 0x0
-  dec byte [input_len]
+  mov bx, [INPUT.len]
+  mov di, [INPUT.ptr]
+  mov byte [di + bx], 0x0         ; remove last char from input
+  dec byte [INPUT.len]            ; decrease input buffer size
   
   jmp .wait_for_key
   
 .cmd:
+  cmp byte [INPUT.len], 0
+  je .flush                       ; reprint prompt if input is empty
+  
   call sh_cr
   
-  mov di, input
+  mov di, [INPUT.ptr]
   mov si, CLEAR
   mov cx, 5
   repe cmpsb
-  je .cmd_clear                     ; command is the builtin clear
+  je .cmd_clear                   ; command is the builtin clear
 
-  mov di, input
+  mov di, [INPUT.ptr]
   mov si, ECHO
   mov cx, 5
   repe cmpsb
-  je .cmd_echo                      ; command is the builtin echo
+  je .cmd_echo                    ; command is the builtin echo
   
-  jmp .cmd_error                    ; command is unknown
+  jmp .cmd_error                  ; command is unknown
 
 .cmd_clear:
   call scr_clear      
@@ -98,14 +109,15 @@ shell:
   jmp .flush
 
 .cmd_echo:
-  lea si, [input + 5]             ; the input string without "echo "
+  mov di, [INPUT.ptr]
+  lea si, [di + 5]                ; the input string without "echo "
   mov cx, 0xFF
   call str_print
   jmp .flush
 
 .cmd_error:
-  mov si, input                   ; print input command
-  mov cx, [input_len]
+  mov si, [INPUT.ptr]             ; print input command
+  mov cx, [INPUT.len]
   call str_print
 
   mov si, ERROR                   ; print the rest of the message
@@ -114,8 +126,9 @@ shell:
 
 .flush:
   call sh_cr
-  mov byte [input], 0
-  mov byte [input_len], 0
+  mov di, [INPUT.ptr]
+  mov byte [di], 0
+  mov byte [INPUT.len], 0
   jmp .print_prompt
 
 .break:
@@ -207,13 +220,16 @@ fn_end
 ; ====
 ; Uppercase values are constants.
 
-input     times 0x20 db 0
-input_len db 0
 CLEAR     db 'clear', 0
-ECHO      db 'echo ', 0             ; The space is to not match "echowhatever"
+ECHO      db 'echo ', 0               ; The space is to not match echowhatever
 ERROR     db ': malformed command', 0
 CR        db 0x0A, 0x0D, 0
 PROMPT    db "$ ", 0
+
+INPUT:        
+  .ptr:  dw 0x7E00
+  .cap:  db 0x80
+  .len:  db 0
 
 ; Pad the file to reach 510 byte and add boot signature at the end.
 times 510-($-$$) db 0
