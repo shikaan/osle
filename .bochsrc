@@ -3,3 +3,4 @@ floppya: 1_44=boot.o, status=inserted
 boot: a
 mouse: enabled=0
 display_library: sdl2
+magic_break: enabled=1
