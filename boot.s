@@ -45,8 +45,7 @@ shell:
   jne .print_char                 ; else, try to print
 
 .print_char:
-  mov dl, [INPUT.cap]
-  cmp [INPUT.len], dl
+  cmp byte [INPUT.len], INPUT_CAP
   jae .wait_for_key               ; nop if the input buffer is full
 
   mov bh, 0                       ; clear high byte for good measure
@@ -56,7 +55,6 @@ shell:
   mov byte [di + bx + 1], 0       ; null terminate the input
   inc byte [INPUT.len]            ; inclease size
 
-  mov di, ax
   call scr_tty                    ; write the new character on screen
 
   jmp .wait_for_key
@@ -65,11 +63,10 @@ shell:
   cmp byte [INPUT.len], 0
   je .wait_for_key                ; nop if input is empty
 
-  mov di, ax                      ; print backspace (move backwards)
-  call scr_tty
+  call scr_tty                    ; print backspace (move backwards)
 
   mov ax, 0x0A00                  ; 0A: write character, 00: null-byte
-  mov bh, 0x00                    ; page = 0
+  xor bh, bh                      ; page = 0
   mov cx, 1                       ; how many repetitions?
   int 0x10                        ; put null-byte on screen (i.e., delete)
 
@@ -86,21 +83,20 @@ shell:
 
   call sh_cr
 
+  mov cx, 3                       ; all commands below have length 3
+
   mov di, [INPUT.ptr]
   mov si, CLEAR
-  mov cx, 3
   repe cmpsb
   je .cmd_clear                   ; command is the builtin clear
 
   mov di, [INPUT.ptr]
   mov si, WF
-  mov cx, 3
   repe cmpsb
   je .cmd_wf                      ; command is the builtin write file
 
   mov di, [INPUT.ptr]
   mov si, RF
-  mov cx, 3
   repe cmpsb
   je .cmd_rf                      ; command is the builtin read file
 
@@ -108,14 +104,14 @@ shell:
 
 .cmd_clear:
   mov ax, 0x0600                  ; scroll up and clear window
-  mov cx, 0x0000                  ; top left corner = 0,0
+  xor cx, cx                      ; top left corner = 0,0
   mov dx, 0x184F                  ; bottom right corner = 18,4F
   mov bh, 0x07                    ; set background color
   int 0x10                        ; clear screen
 
   mov dx, -1                      ; move at the top of the screen
   mov ax, 0x0200
-  mov bh, 0x00
+  xor bh, bh
   int 0x10
   jmp .flush
 
@@ -161,10 +157,6 @@ shell:
   jmp .flush
 
 .cmd_error:
-  mov si, [INPUT.ptr]                 ; print input command
-  mov cx, [INPUT.len]
-  call str_print
-
   mov si, ERROR                       ; print the rest of the message
   mov cx, 0XFF
   call str_print
@@ -218,12 +210,11 @@ str_copy:
 ; Screen
 ; ------
 
-; scr_tty(di: u8 char) -> void
+; scr_tty(al: u8 char) -> void
 ; Like put_char, but advances the cursor as well.
 scr_tty:
-  mov ax, di
   mov ah, 0x0E  ; 0E: teletype
-  mov bh, 0x00  ; page = 0
+  xor bh, bh    ; page = 0
   int 0x10
   ret
 
@@ -259,7 +250,6 @@ fs_create:
   jc .done
   pop di
   call fs_switch_segment
-  mov si, FS_BLOCK_SIZE
   mov cx, FS_FILES
   xor bx, bx
 .find_empty_block:
@@ -326,14 +316,14 @@ fs_find:
 CLEAR     db 'cl', 0
 WF        db 'wf '                ; The space is to not match wfelse
 RF        db 'rf '                ; The space is to not match rfelse
-ERROR     db ': error', 0
+ERROR     db 'error', 0
 CR        db 0x0A, 0x0D
 PROMPT    db "$ "
 
 INPUT:
-  .ptr:   dw 0x7E00
-  .cap:   db 0x80
-  .len:   db 0
+  .ptr:     dw 0x7E00
+  .len:     db 0
+INPUT_CAP   equ 0x80
 
 ; Pad the file to reach 510 byte and add boot signature at the end.
 times 510-($-$$) db 0
