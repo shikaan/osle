@@ -30,9 +30,8 @@ main:
 ; Launches an interactive command prompt, the entry point of our real-mode OS.
 shell:
 .print_prompt:
-  mov si, PROMPT
-  mov cx, 2
-  call str_print
+  mov al, '>'
+  call scr_tty
 
 .wait_for_key:
   xor ax, ax                      ; Function 0: Read Character
@@ -48,7 +47,7 @@ shell:
   cmp byte [INPUT.len], INPUT_CAP
   jae .wait_for_key               ; nop if the input buffer is full
 
-  mov bh, 0                       ; clear high byte for good measure
+  xor bh, bh                       ; clear high byte for good measure
   mov bl, [INPUT.len]
   mov di, [INPUT.ptr]
   mov byte [di + bx], al          ; append char at the end of the buffer
@@ -175,9 +174,10 @@ shell:
 ; sh_cr(void)
 ; Moves the cursor at the beginning of the next line.
 sh_cr:
-  mov si, CR
-  mov cx, 2
-  call str_print
+  mov al, 0x0d
+  call scr_tty
+  mov al, 0x0a
+  call scr_tty
   ret
 
 ; String
@@ -190,7 +190,7 @@ str_print:
 .loop:
   lodsb
   test al, al    ; is end of the string?
-  jz .done
+  je .done
   int 0x10
   loop .loop
 .done:
@@ -225,9 +225,9 @@ scr_tty:
 ; representing a file will have the following structure
 ;
 ; File Entry (1024 bytes)
-;   file_path u8[22]    - /-separated path of the file
-;   size      u16       - file size in bytes
-;   data      u8[1000]  - file content
+;   name  u8[22]    - name of the file
+;   size  u16       - file size in bytes
+;   data  u8[1000]  - file content
 FS_SEGMENT      equ 0x1000
 FS_FILES        equ 64
 FS_NAME_SIZE    equ 22
@@ -243,33 +243,28 @@ fs_switch_segment:
 
 ; fs_create(di: u8* name) -> (ax: relative_address)
 ; Creates an empty file with a given name. Returns the address of the file
-; relative to the FS_SEGMENT. Sets carry flag in case of failure.
+; relative to the FS_SEGMENT. If the file exists, it truncates it.
+; Sets carry flag in case of failure.
 fs_create:
-  push di
-  call fs_find                        ; end if a file with same name exists
-  jc .done
-  pop di
   call fs_switch_segment
   mov cx, FS_FILES
   xor bx, bx
 .find_empty_block:
-  test byte [es:bx], 0                ; a block is free when filename is empty
+  cmp byte [es:bx], 0                 ; a block is free if file name is empty
   je .found
-  add bx, FS_BLOCK_SIZE
+  add bx, FS_BLOCK_SIZE               ; advance to nex block
   loop .find_empty_block
-  stc                                 ; set carry flag to signal failure
-  jmp .done
+  stc                                 ; signal failure
+  ret
 .found:
-  mov si, bx
-  mov word [es:si + FS_NAME_SIZE], 0  ; Set file size
+  mov word [es:bx + FS_NAME_SIZE], 0  ; set file size
   mov si, di
   mov di, bx
   mov cx, FS_NAME_SIZE
-  push di
-  call str_copy                       ; Set file name
-  pop ax
+  push bx
+  call str_copy                       ; set name in the block
+  pop ax                              ; return offset of the found block
   clc
-.done:
   ret
 
 ; fs_write(di: u16 address, si: u8* buffer, cx: size)
@@ -282,26 +277,28 @@ fs_write:
   lodsb
   stosb
   loop .copy
+.done:
   ret
 
 ; fs_find(di: u8* name) -> (ax: relative_address)
-; Sets carry flag in case of failure.
+; Look for a file with a given name. Sets carry flag in case of failure.
 fs_find:
   call fs_switch_segment
-  mov si, di
+  mov dx, di              ; store the name in dx
   xor bx, bx
   mov cx, FS_FILES        ; loop through all the files to find ours
-.next_file:
+.loop:
   mov di, bx
-.compare:
+  mov si, dx
+.compare_names:
   cmpsb
   jne .break              ; filenames differ, break
   cmp byte [si-1], 0
   je .match               ; end of the file, found a metch
-  jmp .compare
+  jmp .compare_names
 .break:
   add bx, FS_BLOCK_SIZE   ; advance to next block
-  loop .next_file
+  loop .loop
   stc                     ; signal error
   ret
 .match:
@@ -314,11 +311,9 @@ fs_find:
 ; Uppercase values are constants.
 
 CLEAR     db 'cl', 0
-WF        db 'wf '                ; The space is to not match wfelse
-RF        db 'rf '                ; The space is to not match rfelse
+WF        db 'wf '                ; Space is required for correct matching
+RF        db 'rf '                ;   when command takes arguments
 ERROR     db 'error', 0
-CR        db 0x0A, 0x0D
-PROMPT    db "$ "
 
 INPUT:
   .ptr:     dw 0x7E00
