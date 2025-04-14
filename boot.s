@@ -8,13 +8,6 @@
 [org 0x7c00]
 bits 16
 
-register_interrupts:
-  xor ax, ax
-  mov ds, ax
-  mov bx, boot
-  mov [PM_RETURN * 4], bx     ; register boot at interrupt PM_RETURN
-  mov [PM_RETURN * 4 + 2], ax
-
 boot:
   xor ax, ax
   mov ds, ax      ; Data segment
@@ -22,6 +15,14 @@ boot:
   mov ss, ax      ; Stack segment
   mov sp, 0x7c00  ; Set stack pointer
 
+  mov byte [INPUT.len], 0
+
+register_interrupts:
+  mov bx, boot
+  mov [PM_RETURN * 4], bx     ; register boot at interrupt PM_RETURN
+  mov [PM_RETURN * 4 + 2], ax
+
+reset_screen:
   mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
   int 0x10
 
@@ -41,6 +42,7 @@ shell:
 .print_prompt:
   mov al, '>'
   call scr_tty
+  push es
 
 .wait_for_key:
   xor ax, ax                      ; Function 0: Read Character
@@ -56,12 +58,11 @@ shell:
   cmp byte [INPUT.len], INPUT_CAP
   jae .wait_for_key               ; nop if the input buffer is full
 
-  xor bh, bh                       ; clear high byte for good measure
-  mov bl, [INPUT.len]
+  movzx bx, byte [INPUT.len]      ; load input length into bx
   mov di, [INPUT.ptr]
-  mov byte [di + bx], al          ; append char at the end of the buffer
+  mov [di + bx], al               ; append char at the end of the buffer
+  inc byte [INPUT.len]            ; increase size
   mov byte [di + bx + 1], 0       ; null terminate the input
-  inc byte [INPUT.len]            ; inclease size
 
   call scr_tty                    ; write the new character on screen
 
@@ -177,14 +178,9 @@ shell:
 
 .flush:
   call sh_cr
-  mov di, [INPUT.ptr]
-  mov word [di], 0
   mov byte [INPUT.len], 0
-  mov es, [di]                        ; reset es to zero
+  pop es
   jmp .print_prompt
-
-.break:
-  ret
 
 ; sh_cr(void)
 ; Moves the cursor at the beginning of the next line.
@@ -330,7 +326,7 @@ PM_RETURN   equ 0x20
 PM_SEGMENT  equ 0x2000
 
 ; pm_exec(di: u8* filename)
-; Loads a binary in the PM_SEGMENT and executes it.
+; Loads a binary in the PM_SEGMENT and runs it. Sets carry flag upon failure.
 pm_exec:
   call fs_find
   jc .done
