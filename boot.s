@@ -7,14 +7,23 @@
 
 [org 0x7c00]
 bits 16
-xor ax, ax
-mov ds, ax      ; Data segment
-mov es, ax      ; Extra segment
-mov ss, ax      ; Stack segment
-mov sp, 0x7c00  ; Set stack pointer
 
-mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
-int 0x10
+register_interrupts:
+  xor ax, ax
+  mov ds, ax
+  mov bx, boot
+  mov [PM_RETURN * 4], bx     ; register boot at interrupt PM_RETURN
+  mov [PM_RETURN * 4 + 2], ax
+
+boot:
+  xor ax, ax
+  mov ds, ax      ; Data segment
+  mov es, ax      ; Extra segment
+  mov ss, ax      ; Stack segment
+  mov sp, 0x7c00  ; Set stack pointer
+
+  mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
+  int 0x10
 
 main:
   call shell
@@ -99,7 +108,8 @@ shell:
   repe cmpsb
   je .cmd_rf                      ; command is the builtin read file
 
-  jmp .cmd_error                  ; command is unknown
+  call .cmd_run                   ; command is the builtin run
+  jc .cmd_error                   ; command is unknown
 
 .cmd_clear:
   mov ax, 0x0600                  ; scroll up and clear window
@@ -155,9 +165,14 @@ shell:
   mov ds, ax                          ; restore ds to zero
   jmp .flush
 
+.cmd_run:
+  mov di, [INPUT.ptr]
+  call pm_exec
+  ret
+
 .cmd_error:
-  mov si, ERROR                       ; print the rest of the message
-  mov cx, 0XFF
+  mov si, ERROR
+  mov cx, 5
   call str_print
 
 .flush:
@@ -306,6 +321,32 @@ fs_find:
   clc                     ; success
   ret
 
+; Process Management
+; ==================
+; The model for this OS is cooperative: the program that is started takes on
+; the machine. It will return control to the main os by means of PM_RETURN
+; interrupt.
+PM_RETURN   equ 0x20
+PM_SEGMENT  equ 0x2000
+
+; pm_exec(di: u8* filename)
+; Loads a binary in the PM_SEGMENT and executes it.
+pm_exec:
+  call fs_find
+  jc .done
+  mov bx, ax
+  mov ax, FS_SEGMENT
+  mov ds, ax
+  lea si, [es:bx + FS_HEADER_SIZE]
+  mov ax, PM_SEGMENT
+  mov es, ax
+  xor di, di
+  mov cx, word [ds:bx + FS_NAME_SIZE]
+  repe movsb
+  jmp PM_SEGMENT:0
+.done:
+  ret
+
 ; Data
 ; ====
 ; Uppercase values are constants.
@@ -313,7 +354,7 @@ fs_find:
 CLEAR     db 'cl', 0
 WF        db 'wf '                ; Space is required for correct matching
 RF        db 'rf '                ;   when command takes arguments
-ERROR     db 'error', 0
+ERROR     db 'error'
 
 INPUT:
   .ptr:     dw 0x7E00
