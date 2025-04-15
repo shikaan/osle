@@ -1,3 +1,2 @@
-loadmem "bin/snake.header.o" 0x1000:0x0000
-loadmem "bin/snake.o" 0x1000:0x0018
+loadmem "bin/snake.bin" 0x1000:0x0000
 c
