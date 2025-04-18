@@ -174,22 +174,6 @@ draw_line:
   xor dl, dl                ; Column = 0
   int 0x10
 
-  ; Clear the line with spaces
-  pusha                           ; Save all registers
-  mov cx, MAX_COLS                ; Clear columns
-  mov ah, 0x0E                    ; Teletype function
-  mov al, ' '                     ; Space character
-  .clear_loop:
-    int 0x10                      ; Print space
-    loop .clear_loop              ; Repeat until cx = 0
-  popa                            ; Restore all registers
-
-  ; Reset cursor position to beginning of line
-  mov ah, 0x02                    ; Set cursor position
-  mov dh, cl                      ; Row = cl (current line)
-  xor dl, dl                      ; Column = 0
-  int 0x10
-
   movzx bx, cl
   movzx cx, byte [lines_len + bx]
   shl bx, 6                         ; multiply by 64, line size
