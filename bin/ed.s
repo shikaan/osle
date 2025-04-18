@@ -32,15 +32,18 @@ main:
   cmp al, 0x08
   je .backspace
 
-  cmp al, 32          ; Check if >= space (ASCII 32)
-  jb .wait_for_key    ; If below 32, it's not printable
-  cmp al, 126         ; Check if <= tilde (ASCII 126) 
-  ja .wait_for_key    ; If above 126, it's not printable
+  cmp byte [CURSOR], MAX_COLS-1
+  jae .wait_for_key
+
+  cmp al, 32                      ; only try to print printable chars
+  jb .wait_for_key
+  cmp al, 126 
+  ja .wait_for_key
 
   call write_char
-  mov cx, [CURSOR+1]
+  mov cx, [CURSOR+1]              ; redraw current line with the new char
   call draw_line
-  inc byte [CURSOR]
+  inc byte [CURSOR]               ; update logical cursor accordingly
   jmp .wait_for_key
 
 .left:
@@ -50,7 +53,7 @@ main:
   jmp .wait_for_key
 
 .right:
-  cmp byte [CURSOR], 79
+  cmp byte [CURSOR], MAX_COLS-1
   jae .wait_for_key
 
   movzx bx, byte [CURSOR+1]
@@ -74,9 +77,7 @@ main:
   jmp .wait_for_key
 
 .down:
-  cmp byte [CURSOR+1], 24
-  jae .wait_for_key
-  cmp byte [CURSOR+1], MAX_LINES -1
+  cmp byte [CURSOR+1], MAX_ROWS-1
   je .wait_for_key
   inc byte [CURSOR+1]
 
@@ -93,7 +94,7 @@ main:
   jmp .wait_for_key
 
 .return:
-  cmp byte [CURSOR+1], MAX_LINES -1
+  cmp byte [CURSOR+1], MAX_ROWS -1
   je .wait_for_key
 
   inc byte [CURSOR+1]
@@ -126,6 +127,8 @@ main:
 
   jmp .wait_for_key
 
+; draw_cursor(void) -> void
+; Positions the terminal cursor where the logical cursor is
 draw_cursor:
   xor bh, bh        ; Page number = 0
   mov ah, 0x02      ; Set cursor position function
@@ -134,35 +137,33 @@ draw_cursor:
   ret
 
 ; write_char(al: u8 char) -> void
-; Writes the char in al at LINES[CURSOR.Y][CURSOR.X]
+; Writes the char in al at LINES_BUFFER_BASE[CURSOR.Y][CURSOR.X]
 write_char:
   movzx bx, byte [CURSOR+1]
-  mov cl, byte [lines_len + bx] ; get line length
-  
+  mov cl, byte [lines_len + bx]         ; get line length
   mov dl, byte [CURSOR]
   cmp dl, cl
-  jb .put_char_in_line          ; increase length if end of line
-  
+  jb .write_to_buffer                   ; increase length if end of line
   inc byte [lines_len + bx]
   
-.put_char_in_line:
-  push bx                       ; save line index
-  shl bx, 1                     ; multiply by 2 for word array
-  mov di, word [LINES + bx]     ; get pointer to line
-  pop bx                        ; restore line index
-  movzx bx, byte [CURSOR]       ; put col (X) in bx
+.write_to_buffer:
+  push bx                               ; save line index
+  shl bx, 6                             ; multiply by 64, line size
+  lea di, [LINES_BUFFER_BASE + bx]                  ; get pointer to line
+  pop bx                                ; restore line index
+  movzx bx, byte [CURSOR]               ; put col (X) in bx
   mov byte [di + bx], al
   ret
 
-draw_buffer:
-  mov cx, MAX_LINES - 1     ; Start from the last line
-.loop:
-  push cx
-  call draw_line
-  pop cx
-  dec cx                    ; Move to previous line
-  jns .loop                 ; Continue until cx becomes negative
-  ret
+; draw_buffer:
+;   mov cx, MAX_ROWS - 1     ; Start from the last line
+; .loop:
+;   push cx
+;   call draw_line
+;   pop cx
+;   dec cx                    ; Move to previous line
+;   jns .loop                 ; Continue until cx becomes negative
+;   ret
 
 ; draw_line(cl: u8 index)
 ; Draws line at index cl
@@ -175,7 +176,7 @@ draw_line:
 
   ; Clear the line with spaces
   pusha                           ; Save all registers
-  mov cx, 80                      ; Clear 80 columns
+  mov cx, MAX_COLS                ; Clear columns
   mov ah, 0x0E                    ; Teletype function
   mov al, ' '                     ; Space character
   .clear_loop:
@@ -191,9 +192,9 @@ draw_line:
 
   movzx bx, cl
   movzx cx, byte [lines_len + bx]
-  shl bx, 1                         ; Multiply by 2 for word array
-  mov si, word [LINES + bx]         ; Get pointer to line
-  call print_buffer                   ; Print the line
+  shl bx, 6                         ; multiply by 64, line size
+  lea si, [LINES_BUFFER_BASE + bx]
+  call print_buffer
   ret
 
 ; print_buffer(si: u8* string, cx: count) -> void
@@ -210,11 +211,11 @@ print_buffer:
 
 CURSOR dw 0x0000
 
-MAX_LINES equ 23  ; 0-23 for 24 total lines
-LINES     dw 0x3000, 0x3050, 0x30A0, 0x30F0, 0x3140, 0x3190, 0x31E0, 0x3230
-      dw 0x3280, 0x32D0, 0x3320, 0x3370, 0x33C0, 0x3410, 0x3460, 0x34B0
-      dw 0x3500, 0x3550, 0x35A0, 0x35F0, 0x3640, 0x3690, 0x36E0
-lines_len db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+MAX_ROWS            equ 23
+MAX_COLS            equ 64
+LINES_BUFFER_BASE   equ 0x3000
+lines_len           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                    db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 times 510-($-$$) db 0
 dw 0xAA55
