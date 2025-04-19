@@ -1,2 +1,5 @@
 loadmem "bin/snake.bin" 0x1000:0x0000
+loadmem "bin/ed.bin" 0x1000:0x0400
+loadmem "bin/hello.bin" 0x1000:0x0800
+loadmem "fixtures/test.bin" 0x1000:0x0C00
 c

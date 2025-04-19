@@ -15,5 +15,5 @@ start: boot.o
 	bochs -q -f .bochsrc
 
 .PHONY: debug
-debug: boot.o
-	bochs -debugger -q -f .bochsrc
+debug: boot.o bin/ed.bin bin/snake.bin bin/hello.bin
+	bochs -dbg -rc load_bin -f .bochsrc
