@@ -18,18 +18,22 @@ boot:
   mov byte [INPUT.len], 0
 
 register_interrupts:
-  mov bx, boot
-  mov [PM_RETURN * 4], bx     ; register boot at interrupt PM_RETURN
-  mov [PM_RETURN * 4 + 2], ax
+  xor di, di                        ; Start with interrupt 0x20 (INT_RETURN)
+  mov cx, INTERRUPT_COUNT
+  mov si, INTERRUPTS
+
+.loop:
+  lodsw                             ; Load word from INTERRUPTS into ax
+  mov [INT_RETURN * 4 + di], ax     ; Set offset for interrupt vector
+  mov [INT_RETURN * 4 + di + 2], ds ; Set segment for interrupt vector
+  add di, 4                         ; Move to next interrupt vector (4 bytes each)
+  loop .loop
 
 reset_screen:
   mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
   int 0x10
 
 main:
-  call shell
-  jmp $          ; Infinite loop
-
 ; Definitions
 ; ===========
 
@@ -52,7 +56,6 @@ shell:
   je .cmd
   cmp al, 0x08                    ; key is BACKSPACE
   je .backspace
-  jne .print_char                 ; else, try to print
 
 .print_char:
   cmp byte [INPUT.len], INPUT_CAP
@@ -100,11 +103,6 @@ shell:
   je .cmd_clear                   ; command is the builtin clear
 
   mov di, [INPUT.ptr]
-  mov si, WF
-  repe cmpsb
-  je .cmd_wf                      ; command is the builtin write file
-
-  mov di, [INPUT.ptr]
   mov si, RF
   repe cmpsb
   je .cmd_rf                      ; command is the builtin read file
@@ -125,45 +123,16 @@ shell:
   int 0x10
   jmp .flush
 
-.cmd_wf:
-  mov di, [INPUT.ptr]
-  add di, 3                       ; skip "wf ", di now points to args
-  mov si, di                      ; load args in si for parsing
-
-.find_space:
-  lodsb
-  cmp al, ' '
-  jnz .find_space
-                                  ; now di is first arg and si second
-  push si                         ; we store si and null-separate args in INPUT
-  mov byte [si-1], 0
-
-  call fs_create                  ; create filw with name in di
-  jc .done
-
-  mov di, ax
-  pop si
-  mov cx, [INPUT.len]
-  add cx, [INPUT.ptr]
-  sub cx, si                      ; cx = length of third argument
-  call fs_write                   ; write bytes to the file we created earlier
-
-.done:
-  jmp .flush
-
 .cmd_rf:
   mov di, [INPUT.ptr]
   add di, 3                           ; put filename in di
-  call fs_find
+  mov bx, FS_FILE_MEMORY
+  int INT_FS_FIND
   jc .cmd_error
-  mov bx, ax                          ; store file pointer in bx
-  mov dx, FS_SEGMENT                  ; update ds to read file correctly
-  mov ds, dx
-  lea si, [es:bx + FS_HEADER_SIZE]    ; store data pointer in si
-  mov cx, word [es:bx + FS_NAME_SIZE] ; store file size in cx
+
+  lea si, [bx + FS_HEADER_SIZE]
+  mov cx, word [bx + FS_NAME_SIZE]
   call str_print
-  xor ax, ax
-  mov ds, ax                          ; restore ds to zero
   jmp .flush
 
 .cmd_run:
@@ -231,118 +200,96 @@ scr_tty:
 
 ; File System
 ; ===========
-; Files are only stored in memory. They live at segment FS_SEGMENT and to
-; simplify addressing we will only allow 64 files of 1kb each. Each block
-; representing a file will have the following structure
+; Files are stored on the floppy disk itself. To simplify lookups, we allocate
+; one file per track and use only one side. This means every file can be 9kb
+; (18 sectors * 512 bytes) and we can have 40 files in total.
 ;
-; File Entry (1024 bytes)
+; File Entry (9216 bytes)
 ;   name  u8[22]    - name of the file
 ;   size  u16       - file size in bytes
-;   data  u8[1000]  - file content
-FS_SEGMENT      equ 0x1000
-FS_FILES        equ 64
+;   data  u8[9192]  - file content
+FS_FILES        equ 40
 FS_NAME_SIZE    equ 22
 FS_HEADER_SIZE  equ 24
-FS_BLOCK_SIZE   equ 1024
+FS_BLOCK_SIZE   equ 9216
 
-; fs_switch_segment(void)
-; Switches es to the file segment, to perform file operations.
-fs_switch_segment:
-  mov ax, FS_SEGMENT
-  mov es, ax
-  ret
+int_failure:
+  mov bx, sp
+  or word [bx+4], 1
+  iret
 
-; fs_create(di: u8* name) -> (ax: relative_address)
-; Creates an empty file with a given name. Returns the address of the file
-; relative to the FS_SEGMENT. If the file exists, it truncates it.
-; Sets carry flag in case of failure.
-fs_create:
-  call fs_switch_segment
-  mov cx, FS_FILES
-  xor bx, bx
-.find_empty_block:
-  cmp byte [es:bx], 0                 ; a block is free if file name is empty
-  je .found
-  add bx, FS_BLOCK_SIZE               ; advance to nex block
-  loop .find_empty_block
-  stc                                 ; signal failure
-  ret
-.found:
-  mov word [es:bx + FS_NAME_SIZE], 0  ; set file size
-  mov si, di
-  mov di, bx
-  mov cx, FS_NAME_SIZE
-  push bx
-  call str_copy                       ; set name in the block
-  pop ax                              ; return offset of the found block
-  clc
-  ret
+int_success:
+  mov si, sp
+  and word [si+4], 0xFFFE
+  iret
 
-; fs_write(di: u16 address, si: u8* buffer, cx: size)
-; Writes cx bytes of the si buffer in the file at di with data_offset bx.
-fs_write:
-  call fs_switch_segment
-  mov word [es:di + FS_NAME_SIZE], cx     ; set new size
-  lea di, byte [es:di + FS_HEADER_SIZE]   ; point to data
-.copy:
-  lodsb
-  stosb
-  loop .copy
-.done:
-  ret
-
-; fs_find(di: u8* name) -> (ax: relative_address)
+; int_fs_find(di: u8* name, bx: u8* dest) -> (al: track_number)
 ; Look for a file with a given name. Sets carry flag in case of failure.
-fs_find:
-  call fs_switch_segment
-  mov dx, di              ; store the name in dx
-  xor bx, bx
-  mov cx, FS_FILES        ; loop through all the files to find ours
-.loop:
-  mov di, bx
-  mov si, dx
-.compare_names:
-  cmpsb
-  jne .break              ; filenames differ, break
-  cmp byte [si-1], 0
-  je .match               ; end of the file, found a metch
-  jmp .compare_names
-.break:
-  add bx, FS_BLOCK_SIZE   ; advance to next block
-  loop .loop
-  stc                     ; signal error
-  ret
-.match:
-  mov ax, bx              ; ax = file address
-  clc                     ; success
-  ret
+FS_FILE_MEMORY equ 0x7E80
+int_fs_find:
+  mov cx, FS_FILES
+  mov dl, 1
+.search_loop:
+  push cx
+  push dx
+  push di
+    mov ax, 0x0212          ; ah = read; al = 1 sector (name is in first sector)
+    mov ch, dl              ; track number
+    mov cl, 1               ; start from sector 1
+    xor dx, dx              ; dh = 0 (drive A), dl = head 0
+    int 0x13
+    jc int_failure
+
+    mov cx, FS_NAME_SIZE ; fixme
+    mov si, bx
+    .compare_names:
+      lodsb
+      cmp al, byte [di]
+      jne .break
+      test al, al
+      je .found
+      inc di
+      loop .compare_names
+      je .found
+  .break:
+  pop di
+  pop dx
+  pop cx
+
+  inc dl
+  loop .search_loop
+  jmp int_failure
+.found:
+  pop di
+  pop dx
+  pop cx
+  mov al, dl
+  jmp int_success
 
 ; Process Management
 ; ==================
 ; The model for this OS is cooperative: the program that is started takes on
-; the machine. It will return control to the main os by means of PM_RETURN
+; the machine. It will return control to the main os by means of INT_RETURN
 ; interrupt.
-PM_RETURN   equ 0x20
 PM_SEGMENT  equ 0x2000
-PM_STACK        equ 0XFFFE
+PM_STACK    equ 0XFFFE
 
 ; pm_exec(di: u8* filename)
 ; Loads a binary in the PM_SEGMENT and runs it. Sets carry flag upon failure.
 pm_exec:
-  call fs_find
+  mov bx, FS_FILE_MEMORY
+  int INT_FS_FIND
   jc .done
-  mov bx, ax
-  mov ax, FS_SEGMENT
-  mov ds, ax
-  lea si, [es:bx + FS_HEADER_SIZE]    ; prepare source (data segment of file)
-  
+
+  lea si, [bx + FS_HEADER_SIZE]    ; prepare source (data segment of file)
+
   mov ax, PM_SEGMENT
   mov es, ax
   xor di, di                          ; prepare destination (PM_SEGMENT)
 
-  mov cx, word [ds:bx + FS_NAME_SIZE] ; only copy as many bytes as in the size
+  mov cx, word [bx + FS_NAME_SIZE]    ; only copy as many bytes as in the size
   repe movsb                          ; copy!
-  
+
   mov ax, PM_SEGMENT
   mov ds, ax                ; Guest DS = PM_SEGMENT
   mov es, ax                ; Guest ES = PM_SEGMENT
@@ -366,6 +313,14 @@ INPUT:
   .ptr:     dw 0x7E00
   .len:     db 0
 INPUT_CAP   equ 0x80
+
+INTERRUPT_COUNT equ 2
+INTERRUPTS:
+  dw boot
+  dw int_fs_find
+
+INT_RETURN    equ 0x20
+INT_FS_FIND   equ 0x21
 
 ; Pad the file to reach 510 byte and add boot signature at the end.
 times 510-($-$$) db 0
