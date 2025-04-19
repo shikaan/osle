@@ -324,6 +324,7 @@ fs_find:
 ; interrupt.
 PM_RETURN   equ 0x20
 PM_SEGMENT  equ 0x2000
+PM_STACK        equ 0XFFFE
 
 ; pm_exec(di: u8* filename)
 ; Loads a binary in the PM_SEGMENT and runs it. Sets carry flag upon failure.
@@ -333,12 +334,21 @@ pm_exec:
   mov bx, ax
   mov ax, FS_SEGMENT
   mov ds, ax
-  lea si, [es:bx + FS_HEADER_SIZE]
+  lea si, [es:bx + FS_HEADER_SIZE]    ; prepare source (data segment of file)
+  
   mov ax, PM_SEGMENT
   mov es, ax
-  xor di, di
-  mov cx, word [ds:bx + FS_NAME_SIZE]
-  repe movsb
+  xor di, di                          ; prepare destination (PM_SEGMENT)
+
+  mov cx, word [ds:bx + FS_NAME_SIZE] ; only copy as many bytes as in the size
+  repe movsb                          ; copy!
+  
+  mov ax, PM_SEGMENT
+  mov ds, ax                ; Guest DS = PM_SEGMENT
+  mov es, ax                ; Guest ES = PM_SEGMENT
+  mov ss, ax                ; Guest SS = PM_SEGMENT
+  mov sp, PM_STACK          ; Guest SP = Top of segment
+
   jmp PM_SEGMENT:0
 .done:
   ret

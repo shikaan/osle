@@ -1,13 +1,6 @@
 [org 0x7c00]
 bits 16
 
-xor ax, ax
-mov ds, ax      ; Data segment
-mov es, ax      ; Extra segment
-mov ss, ax      ; Stack segment
-mov sp, 0x7c00  ; Set stack pointer
-
-reset_screen:
   mov ax, 0x0003
   int 0x10
 
