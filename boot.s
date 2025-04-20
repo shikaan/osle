@@ -213,11 +213,15 @@ FS_NAME_SIZE    equ 22
 FS_HEADER_SIZE  equ 24
 FS_BLOCK_SIZE   equ 9216
 
+; int_failure(void)
+; Returns failure from an interrupt, setting the carry flag.
 int_failure:
   mov bx, sp
   or word [bx+4], 1
   iret
 
+; int_success(void)
+; Returns success from an interrupt, clear the carry flag.
 int_success:
   mov si, sp
   and word [si+4], 0xFFFE
@@ -230,8 +234,7 @@ int_fs_find:
   mov cx, FS_FILES
   mov dl, 1
 .search_loop:
-  push cx
-  push dx
+  pusha
   push di
     mov ax, 0x0212          ; ah = read; al = 1 sector (name is in first sector)
     mov ch, dl              ; track number
@@ -242,27 +245,25 @@ int_fs_find:
 
     mov cx, FS_NAME_SIZE ; fixme
     mov si, bx
-    .compare_names:
-      lodsb
-      cmp al, byte [di]
-      jne .break
-      test al, al
-      je .found
-      inc di
-      loop .compare_names
-      je .found
-  .break:
+.compare_names:
+    lodsb
+    cmp al, byte [di]
+    jne .break
+    test al, al
+    je .found
+    inc di
+    loop .compare_names
+    je .found
+.break:
   pop di
-  pop dx
-  pop cx
+  popa
 
   inc dl
   loop .search_loop
   jmp int_failure
 .found:
   pop di
-  pop dx
-  pop cx
+  popa
   mov al, dl
   jmp int_success
 
