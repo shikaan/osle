@@ -2,24 +2,32 @@
   xchg bx,bx
 %endmacro
 
+INT_RETURN    equ 0x20
+INT_FS_FIND   equ 0x21
+INT_FS_CREATE equ 0x22
+INT_FS_WRITE  equ 0x23
+
 bits 16
 
 mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
 int 0x10
 
+; Tries to locate this file (which surely exists)
 mov di, this_file
-int 0x21
+int INT_FS_FIND
 mov si, FIND_EXT
 jc fail
 call ok
 
+; Creates a new file whose name is `filename`
 mov di, filename
 mov bx, FILE_BUFFER_ADDR
-int 0x22
+int INT_FS_CREATE
 mov si, CREATE
 jc fail
 call ok
 
+; Reads the name of the newly created file
 mov cx, filename_len
 mov si, filename
 mov di, bx
@@ -28,9 +36,38 @@ mov si, NAME
 jne fail
 call ok
 
+; Tries to locate the newly created file
 mov di, filename
+int INT_FS_FIND
+pusha
+  mov si, FIND_NEW
+  jc fail
+  call ok
+popa
+
+; Updates the newly created file
+mov word [bx + 24], 0xbeef
+mov dl, al
+int INT_FS_WRITE
+jc fail
+mov di, filename
+int INT_FS_FIND
+jc fail
+cmp word [bx + 24], 0xbeef
+mov si, UPDATE
+jne fail
+call ok
+
+; Renames the newly created file
+mov si, new_file
+mov di, bx
+mov cx, filename_len
+repe movsb
+int 0x23
+jc fail
+mov di, new_file
 int 0x21
-mov si, FIND_NEW
+mov si, RENAME
 jc fail
 call ok
 
@@ -66,7 +103,7 @@ str_print:
   loop .loop
 .done:
   ret
-   
+
 FILE_BUFFER_ADDR equ 0x4000
 
 OK:   db " OK ", 0x0D, 0x0A, 0
@@ -76,9 +113,12 @@ CREATE:     db "create   ", 0
 FIND_NEW:   db "find new ", 0
 FIND_EXT:   db "find ext ", 0
 NAME:       db "name     ", 0
+RENAME:     db "rename   ", 0
+UPDATE:     db "update   ", 0
 
-MSG:    db  0x0D, 0x0A, "Total: 4", 0x0D, 0x0A, "Press RETURN to continue", 0
+MSG:    db  0x0D, 0x0A, "Total: 5", 0x0D, 0x0A, "Press RETURN to continue", 0
 
+new_file: db "aaaa.txt", 0
 filename: db "test.txt", 0
 filename_len equ $-filename
 this_file: db "fs.bin"

@@ -292,6 +292,14 @@ int_fs_create:
 
   jmp int_success
 
+; int_fs_write(bx: u8* file_buffer, dl: file_index)
+; Writes the input buffer to the file whose index is dl.
+int_fs_write:
+  mov ah, 0x03
+  call fs_disk      ; save buffer on disk
+  jc int_failure
+  jmp int_success
+
 ; fs_disk(ah: u8 operation, bx: u8* destination, dh: u8 file_index)
 ; Performs a disk operation whose source/destination is bx on track dh.
 ;   ah = 0x02 is read
@@ -347,8 +355,7 @@ pm_exec:
 ; Uppercase values are constants.
 
 CLEAR     db 'cl', 0
-WF        db 'wf '                ; Space is required for correct matching
-RF        db 'rf '                ;   when command takes arguments
+RF        db 'rf '                ; Space required to match command with args
 ERROR     db 'error'
 
 INPUT:
@@ -356,15 +363,17 @@ INPUT:
   .len:     db 0
 INPUT_CAP   equ 0x80
 
-INTERRUPT_COUNT equ 3
+INTERRUPT_COUNT equ 4
 INTERRUPTS:
   dw boot
   dw int_fs_find
   dw int_fs_create
+  dw int_fs_write
 
 INT_RETURN    equ 0x20
 INT_FS_FIND   equ 0x21
 INT_FS_CREATE equ 0x22
+INT_FS_WRITE  equ 0x23
 
 ; Pad the file to reach 510 byte and add boot signature at the end.
 times 510-($-$$) db 0
