@@ -24,7 +24,7 @@ start: osle
 
 .PHONY: debug
 debug: osle
-	bochs -dbg -rc load_bin -f .bochsrc
+	bochs -dbg -rc .bochsinit -f .bochsrc
 
 .PHONY: clean
 clean:
