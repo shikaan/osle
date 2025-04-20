@@ -18,15 +18,15 @@ boot:
   mov byte [INPUT.len], 0
 
 register_interrupts:
-  xor di, di                        ; Start with interrupt 0x20 (INT_RETURN)
+  xor di, di                        ; start with interrupt 0x20 (INT_RETURN)
   mov cx, INTERRUPT_COUNT
   mov si, INTERRUPTS
 
 .loop:
-  lodsw                             ; Load word from INTERRUPTS into ax
-  mov [INT_RETURN * 4 + di], ax     ; Set offset for interrupt vector
-  mov [INT_RETURN * 4 + di + 2], ds ; Set segment for interrupt vector
-  add di, 4                         ; Move to next interrupt vector (4 bytes each)
+  lodsw                             ; load word from INTERRUPTS into ax
+  mov [INT_RETURN * 4 + di], ax     ; set offset for interrupt vector
+  mov [INT_RETURN * 4 + di + 2], ds ; set segment for interrupt vector
+  add di, 4                         ; move to next vector (4 bytes each)
   loop .loop
 
 reset_screen:
@@ -215,57 +215,98 @@ FS_BLOCK_SIZE   equ 9216
 
 ; int_failure(void)
 ; Returns failure from an interrupt, setting the carry flag.
+; You cannot use stc here because in an interrupt handler, flags are saved.
 int_failure:
   mov bx, sp
-  or word [bx+4], 1
+  or word [bx + 4], 1
   iret
 
 ; int_success(void)
 ; Returns success from an interrupt, clear the carry flag.
+; You cannot use clc here because in an interrupt handler, flags are saved.
 int_success:
   mov si, sp
-  and word [si+4], 0xFFFE
+  and word [si + 4], 0xFFFE
   iret
 
-; int_fs_find(di: u8* name, bx: u8* dest) -> (al: track_number)
+; int_fs_find(di: u8* name, bx: u8* dest) -> (al: file_index)
 ; Look for a file with a given name. Sets carry flag in case of failure.
 FS_FILE_MEMORY equ 0x7E80
 int_fs_find:
   mov cx, FS_FILES
   mov dl, 1
-.search_loop:
+.search_matching_block:
   pusha
-  push di
-    mov ax, 0x0212          ; ah = read; al = 1 sector (name is in first sector)
-    mov ch, dl              ; track number
-    mov cl, 1               ; start from sector 1
-    xor dx, dx              ; dh = 0 (drive A), dl = head 0
-    int 0x13
+    mov ah, 0x02
+    call fs_disk              ; read file at index dl
     jc int_failure
 
-    mov cx, FS_NAME_SIZE ; fixme
-    mov si, bx
+    mov cx, FS_NAME_SIZE
+    mov si, bx                ; put name in source register for comparison
 .compare_names:
     lodsb
     cmp al, byte [di]
     jne .break
-    test al, al
+    test al, al               ; stop comparison if null char is encountered
     je .found
     inc di
     loop .compare_names
     je .found
 .break:
-  pop di
   popa
-
   inc dl
-  loop .search_loop
+  loop .search_matching_block
   jmp int_failure
 .found:
-  pop di
   popa
-  mov al, dl
+  mov al, dl                  ; move file index in the return register
   jmp int_success
+
+; int_fs_create(di: u8* name, bx: u8* destination) -> (al: file_index)
+; Creates a new file and allocate memory for it in bx. Returns the file index
+; in the range (0-40)
+int_fs_create:
+  mov cx, FS_FILES
+  mov dl, 1
+.search_empty_block:
+  pusha
+    mov ah, 0x02            ; read current track
+    call fs_disk
+    jc int_failure
+
+    cmp byte [bx], 0        ; a file with an empty name is considered empty
+    je .found
+  popa
+  inc dl
+  loop .search_empty_block
+  jmp int_failure
+.found:
+  popa
+  mov si, di
+  mov di, bx
+  mov cx, FS_NAME_SIZE
+  call str_copy             ; write filename in the new file
+  mov ah, 0x03
+  call fs_disk              ; save on disk
+  jc int_failure
+
+  jmp int_success
+
+; fs_disk(ah: u8 operation, bx: u8* destination, dh: u8 file_index)
+; Performs a disk operation whose source/destination is bx on track dh.
+;   ah = 0x02 is read
+;   ah = 0x03 is write
+; This function encapsulates all assumptions on file system of OSle
+;   - One file per track
+;   - All ops are on the whole track
+;   - Only one side of drive A
+fs_disk:
+  mov al, 0x12 ; al = 18 sectors
+  mov ch, dl   ; track number (i.e., the file index)
+  mov cl, 1    ; start from sector 1
+  xor dx, dx   ; dh = 0 (drive A), dl = head 0
+  int 0x13
+  ret
 
 ; Process Management
 ; ==================
@@ -282,7 +323,7 @@ pm_exec:
   int INT_FS_FIND
   jc .done
 
-  lea si, [bx + FS_HEADER_SIZE]    ; prepare source (data segment of file)
+  lea si, [bx + FS_HEADER_SIZE]       ; prepare source (data segment of file)
 
   mov ax, PM_SEGMENT
   mov es, ax
@@ -292,10 +333,10 @@ pm_exec:
   repe movsb                          ; copy!
 
   mov ax, PM_SEGMENT
-  mov ds, ax                ; Guest DS = PM_SEGMENT
-  mov es, ax                ; Guest ES = PM_SEGMENT
-  mov ss, ax                ; Guest SS = PM_SEGMENT
-  mov sp, PM_STACK          ; Guest SP = Top of segment
+  mov ds, ax                          ; guest DS = PM_SEGMENT
+  mov es, ax                          ; guest ES = PM_SEGMENT
+  mov ss, ax                          ; guest SS = PM_SEGMENT
+  mov sp, PM_STACK                    ; guest SP = Top of segment
 
   jmp PM_SEGMENT:0
 .done:
@@ -315,13 +356,15 @@ INPUT:
   .len:     db 0
 INPUT_CAP   equ 0x80
 
-INTERRUPT_COUNT equ 2
+INTERRUPT_COUNT equ 3
 INTERRUPTS:
   dw boot
   dw int_fs_find
+  dw int_fs_create
 
 INT_RETURN    equ 0x20
 INT_FS_FIND   equ 0x21
+INT_FS_CREATE equ 0x22
 
 ; Pad the file to reach 510 byte and add boot signature at the end.
 times 510-($-$$) db 0
