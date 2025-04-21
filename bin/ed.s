@@ -344,7 +344,8 @@ MAX_LEN             equ MAX_COLS * MAX_ROWS
 FILE_HEADER_SIZE    equ 24
 FILE_BUFFER         equ 0x2000
 CURSOR_INIT         equ 0x0100
-CRLF                equ 0x0A0D
+CRLF                equ 0x0D0A
+open_file_handle    db 0x00
 file_data_len       dw 0x0000
 line_length         times MAX_ROWS db 0
 
