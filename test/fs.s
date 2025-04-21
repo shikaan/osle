@@ -50,6 +50,7 @@ mov word [bx + 24], 0xbeef
 mov dl, al
 int INT_FS_WRITE
 jc fail
+mov word [bx + 24], 0x0000 ; clean memory
 mov di, filename
 int INT_FS_FIND
 jc fail
@@ -121,6 +122,6 @@ MSG:    db  0x0D, 0x0A, "Total: 5", 0x0D, 0x0A, "Press RETURN to continue", 0
 new_file: db "aaaa.txt", 0
 filename: db "test.txt", 0
 filename_len equ $-filename
-this_file: db "fs.bin"
+this_file: db "fs"
 
 ; vim: ft=nasm tw=80 cc=+0 commentstring=;\ %s
