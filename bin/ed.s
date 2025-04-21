@@ -22,7 +22,7 @@ wait_for_key:
 
   call insert_char
   call print_buffer
-  call arrow.right ; todo: this should only happen for printables
+  call arrow.right
   jmp wait_for_key
 
 ; arrow(ax: u16 input, dh: line, dl: column)
@@ -88,7 +88,7 @@ control_key:
   cmp ax, 0x0e08 ; backspace
   je .backspace
   cmp ax, 0x1c0D ; enter
-  je .handled
+  je .return
   cmp ax, 0x0f09 ; tab
   je .handled
   clc
@@ -97,16 +97,43 @@ control_key:
 .backspace:
   cmp dl, 0
   je .handled
+
+  call get_buffer_position                            ; if deleting CRLF, remove both chars
+  mov bx, ax
+  sub bx, 2
+  mov ax, word [FILE_BUFFER + FILE_HEADER_SIZE + bx]
+  cmp ax, CRLF
+  jne .delete_once
+
   call delete_char
-  call print_buffer
   call arrow.left
+
+.delete_once:
+  call delete_char
+  call arrow.left
+
+  call print_buffer
+  jmp .handled
+
+.return:
+  cmp dh, MAX_ROWS-1
+  je .handled
+  mov al, 0x0D
+  call insert_char
+  mov al, 0x0A
+  call insert_char
+  call print_buffer
+  inc dh
+  mov dl, 0
+  call set_cursor
+  ; cascades
 
 .handled:
   stc
   ret
 
 ; print_char(al: u8)
-; Prints printable charachters plus carriage return and null byte.
+; Prints printable charachters plus carriage return, line feed, and null byte.
 print_char:
   pusha
     cmp al, 0x0D
@@ -114,12 +141,18 @@ print_char:
     cmp al, 0x0A
     je .print
     cmp al, 0x00
-    je .print
+    je .null
 
     cmp al, 32
     jb .done
     cmp al, 126
     ja .done
+    jmp .print
+
+.null:
+    mov al, 0XFE
+    jmp .print
+
 .print:
     mov ah, 0x0e
     xor bh, bh
@@ -141,7 +174,6 @@ insert_char:
   mov byte [FILE_BUFFER + FILE_HEADER_SIZE + di], al
 
   movzx bx, dh
-  inc byte [line_length + bx]
   inc word [file_data_len]
   ret
 
@@ -152,8 +184,7 @@ delete_char:
   mov di, ax
   call shift_left
   movzx bx, dh
-  dec byte [line_length + bx]
-  inc word [file_data_len]
+  dec word [file_data_len]
   ret
 
 ; push_right(di: u16 logical_position)
@@ -196,8 +227,8 @@ shift_left:
 get_buffer_position:
   xor ax, ax                        ; ax will be the position in the buffer  
   movzx bx, dh
-  cmp dh, 0
-  jmp .current_line                 ; no sum of previous lines, if is first
+  cmp dh, 1
+  jbe .current_line                 ; no sum of previous lines, if is first
   movzx cx, dh                      ; repeat dh times
   dec bx                            ; previous lines, not current
 .sum_loop:
@@ -224,7 +255,7 @@ set_cursor:
   int 0x10
   ret
 
-; clamp_to_line()
+; clamp_to_line(dh: line, dl: column)
 ; Clamps cursor coordinates within the current line. Does not update the cursor!
 clamp_to_line:
   push bx
@@ -241,10 +272,17 @@ clamp_to_line:
 print_buffer:
   call get_cursor
   push dx
+    mov ax, 0x0600                  ; scroll up and clear window
+    xor cx, cx                      ; top left corner = 0,0
+    mov dx, 0x184F                  ; bottom right corner = 18,4F
+    mov bh, 0x07                    ; set background color
+    int 0x10                        ; clear screen
+
     mov dx, CURSOR_INIT
     call set_cursor
     lea si, [FILE_BUFFER + FILE_HEADER_SIZE]
     mov cx, [file_data_len]
+    inc cx                          ; null terminate printing
 .loop:
     mov al, byte [si]
     call print_char
@@ -253,6 +291,37 @@ print_buffer:
 .done:
   pop dx
   call set_cursor
+  call recalculate_line_lengths
+  ret
+
+; recalculate_line_lengths(void)
+; Recalculates the line lengths in the buffer which might have changed as a
+; result of adding or removing chars
+recalculate_line_lengths:
+  pusha
+    mov di, 1                         ; line index
+    mov bx, 0                         ; buffer index
+    mov dl, 0                         ; column index (index on a line)
+    mov cx, [file_data_len]
+.loop:
+    mov ax, word [FILE_BUFFER + FILE_HEADER_SIZE + bx]
+    cmp ax, CRLF
+    je .new_line
+    inc bx
+    inc dl
+    jmp .continue
+.new_line:
+    add dl, 2                         ; account for crlf in column index
+    add bx, 2                         ; account for crlf in buffer index
+    dec cx                            ; account for cflf in the loop counter
+    mov byte [line_length + di], dl
+    inc di
+    mov dx, 0
+    ; cascade
+.continue:
+    loop .loop
+    mov byte [line_length + di], dl
+  popa
   ret
 
 MAX_ROWS            equ 23
@@ -261,5 +330,8 @@ MAX_LEN             equ MAX_COLS * MAX_ROWS
 FILE_HEADER_SIZE    equ 24
 FILE_BUFFER         equ 0x2000
 CURSOR_INIT         equ 0x0100
+CRLF                equ 0x0D0A
 file_data_len       dw 0x0000
 line_length         times MAX_ROWS db 0
+
+; vim: ft=nasm tw=80 cc=+0 commentstring=;\ %s
