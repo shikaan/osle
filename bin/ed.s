@@ -98,12 +98,12 @@ control_key:
   cmp dl, 0
   je .handled
 
-  call get_buffer_position                            ; if deleting CRLF, remove both chars
+  call get_buffer_position
   mov bx, ax
   sub bx, 2
-  mov ax, word [FILE_BUFFER + FILE_HEADER_SIZE + bx]
-  cmp ax, CRLF
-  jne .delete_once
+  mov ax, word [FILE_BUFFER + FILE_HEADER_SIZE + bx]  ; if removing CRLF, remove
+  cmp ax, CRLF                                        ; both bytes
+  jne .delete_once                                    ; else just delete once
 
   call delete_char
   call arrow.left
@@ -324,13 +324,27 @@ recalculate_line_lengths:
   popa
   ret
 
+; open_file(di: u8* filename)
+; Opens a file with a given name in the current buffer. Set carry on failure.
+open_file:
+  mov bx, FILE_BUFFER
+  int 0x21
+  jc .done
+
+  mov ax, [bx + 22]
+  mov word [file_data_len], ax 
+
+  call print_buffer
+.done:
+  ret
+
 MAX_ROWS            equ 23
 MAX_COLS            equ 80
 MAX_LEN             equ MAX_COLS * MAX_ROWS
 FILE_HEADER_SIZE    equ 24
 FILE_BUFFER         equ 0x2000
 CURSOR_INIT         equ 0x0100
-CRLF                equ 0x0D0A
+CRLF                equ 0x0A0D
 file_data_len       dw 0x0000
 line_length         times MAX_ROWS db 0
 
