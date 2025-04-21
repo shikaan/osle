@@ -15,7 +15,7 @@ boot:
   mov ss, ax      ; Stack segment
   mov sp, 0x7c00  ; Set stack pointer
 
-  mov byte [INPUT.len], 0
+  mov byte [input_len], 0
 
 register_interrupts:
   xor di, di                        ; start with interrupt 0x20 (INT_RETURN)
@@ -58,13 +58,13 @@ shell:
   je .backspace
 
 .print_char:
-  cmp byte [INPUT.len], INPUT_CAP
+  cmp byte [input_len], INPUT_CAP
   jae .wait_for_key               ; nop if the input buffer is full
 
-  movzx bx, byte [INPUT.len]      ; load input length into bx
-  mov di, [INPUT.ptr]
+  movzx bx, byte [input_len]      ; load input length into bx
+  mov di, INPUT_PTR
   mov [di + bx], al               ; append char at the end of the buffer
-  inc byte [INPUT.len]            ; increase size
+  inc byte [input_len]            ; increase size
   mov byte [di + bx + 1], 0       ; null terminate the input
 
   call scr_tty                    ; write the new character on screen
@@ -72,40 +72,40 @@ shell:
   jmp .wait_for_key
 
 .backspace:
-  cmp byte [INPUT.len], 0
+  cmp byte [input_len], 0
   je .wait_for_key                ; nop if input is empty
 
   call scr_tty                    ; print backspace (move backwards)
-
+  
   mov ax, 0x0A00                  ; 0A: write character, 00: null-byte
   xor bh, bh                      ; page = 0
   mov cx, 1                       ; how many repetitions?
   int 0x10                        ; put null-byte on screen (i.e., delete)
 
-  mov bx, [INPUT.len]
-  mov di, [INPUT.ptr]
+  mov bx, [input_len]
+  mov di, INPUT_PTR
   mov byte [di + bx], 0x0         ; remove last char from input
-  dec byte [INPUT.len]            ; decrease input buffer size
+  dec byte [input_len]            ; decrease input buffer size
 
   jmp .wait_for_key
 
 .cmd:
-  cmp byte [INPUT.len], 0
+  cmp byte [input_len], 0
   je .flush                       ; reprint prompt if input is empty
 
   call sh_cr
 
   mov cx, 3                       ; all commands below have length 3
 
-  mov di, [INPUT.ptr]
+  mov di, INPUT_PTR
   mov si, CLEAR
   repe cmpsb
   je .cmd_clear                   ; command is the builtin clear
 
-  mov di, [INPUT.ptr]
-  mov si, RF
+  mov di, INPUT_PTR
+  mov si, LS
   repe cmpsb
-  je .cmd_rf                      ; command is the builtin read file
+  je .cmd_ls                      ; command is the builtin ls
 
   call .cmd_run                   ; command is the builtin run
   jc .cmd_error                   ; command is unknown
@@ -123,20 +123,13 @@ shell:
   int 0x10
   jmp .flush
 
-.cmd_rf:
-  mov di, [INPUT.ptr]
-  add di, 3                           ; put filename in di
-  mov bx, FS_FILE_MEMORY
-  int INT_FS_FIND
-  jc .cmd_error
-
-  lea si, [bx + FS_HEADER_SIZE]
-  mov cx, word [bx + FS_NAME_SIZE]
-  call str_print
+.cmd_ls:
+  call fs_list
   jmp .flush
 
 .cmd_run:
-  mov di, [INPUT.ptr]
+  ; todo: implement check to see if file is executable
+  mov di, INPUT_PTR
   call pm_exec
   ret
 
@@ -147,7 +140,7 @@ shell:
 
 .flush:
   call sh_cr
-  mov byte [INPUT.len], 0
+  mov byte [input_len], 0
   pop es
   jmp .print_prompt
 
@@ -300,7 +293,7 @@ int_fs_write:
   jc int_failure
   jmp int_success
 
-; fs_disk(ah: u8 operation, bx: u8* destination, dh: u8 file_index)
+; fs_disk(ah: u8 operation, bx: u8* destination, dl: u8 file_index)
 ; Performs a disk operation whose source/destination is bx on track dh.
 ;   ah = 0x02 is read
 ;   ah = 0x03 is write
@@ -314,6 +307,31 @@ fs_disk:
   mov cl, 1    ; start from sector 1
   xor dx, dx   ; dh = 0 (drive A), dl = head 0
   int 0x13
+  ret
+
+; fs_list()
+; Prints on screen a list of files in the current directory
+fs_list:
+  mov cx, FS_FILES
+  mov dl, 1
+  cld
+.loop:
+  pusha
+    mov bx, FS_FILE_MEMORY
+    mov ah, 0x02
+    call fs_disk              ; read file at index dl
+
+    cmp byte [bx], 0
+    je .continue
+    mov cx, FS_NAME_SIZE
+    mov si, bx                ; put name in source register for comparison
+    call str_print
+    call sh_cr
+.continue:
+  popa
+  inc dl
+  loop .loop
+.done:
   ret
 
 ; Process Management
@@ -355,12 +373,11 @@ pm_exec:
 ; Uppercase values are constants.
 
 CLEAR     db 'cl', 0
-RF        db 'rf '                ; Space required to match command with args
+LS        db 'ls', 0
 ERROR     db 'error'
 
-INPUT:
-  .ptr:     dw 0x7E00
-  .len:     db 0
+input_len   db  0
+INPUT_PTR   equ 0x7E00
 INPUT_CAP   equ 0x80
 
 INTERRUPT_COUNT equ 4
