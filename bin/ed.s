@@ -1,16 +1,36 @@
-[org 0x7c00]
+%macro debugger 0
+  xchg bx,bx
+%endmacro
+
 bits 16
 
   mov ax, 0x0003
   int 0x10
 
-main:
-.wait_for_key:
-  call draw_cursor
+mov dx, 0x0100
+call set_cursor
+
+wait_for_key:
   xor ax, ax
   int 0x16
 
-.handle_key:
+  call arrow
+  jc wait_for_key
+
+  call control_key
+  jc wait_for_key
+
+  call insert_char
+  call print_buffer
+  call arrow.right ; todo: this should only happen for printables
+  jmp wait_for_key
+
+; arrow(ax: u16 input, dh: line, dl: column)
+; Sets carry flag if input is handled
+arrow:
+  push ax
+    call get_cursor
+  pop ax
   cmp ax, 0x4B00
   je .left
   cmp ax, 0x4D00
@@ -19,159 +39,159 @@ main:
   je .up
   cmp ax, 0x5000
   je .down
-
-  cmp al, 0x0D
-  je .return
-  cmp al, 0x08
-  je .backspace
-
-  cmp byte [CURSOR], MAX_COLS-1
-  jae .wait_for_key
-
-  cmp al, 32                      ; only try to print printable chars
-  jb .wait_for_key
-  cmp al, 126 
-  ja .wait_for_key
-
-  call write_char
-  mov cx, [CURSOR+1]              ; redraw current line with the new char
-  call draw_line
-  inc byte [CURSOR]               ; update logical cursor accordingly
-  jmp .wait_for_key
+  clc
+  ret
 
 .left:
-  cmp word [CURSOR], 0
-  je .wait_for_key
-  dec byte [CURSOR]
-  jmp .wait_for_key
+  cmp dl, 0
+  je .done                          ; don't move left if start of line
+  dec dl
+  jmp .update
 
 .right:
-  cmp byte [CURSOR], MAX_COLS-1
-  jae .wait_for_key
-
-  movzx bx, byte [CURSOR+1]
-  mov cl, byte [lines_len + bx]
-  cmp byte [CURSOR], cl
-  jae .wait_for_key
-
-  inc byte [CURSOR]
-  jmp .wait_for_key
+  movzx bx, dh
+  cmp dl, byte [line_length + bx]
+  jae .done                         ; don't move right if end of line
+  
+  inc dl
+  jmp .update
 
 .up:
-  cmp word [CURSOR+1], 0
-  je .wait_for_key
-  dec byte [CURSOR+1]
-
-  movzx bx, byte [CURSOR+1]
-  mov cl, byte [lines_len + bx]
-  cmp byte [CURSOR], cl
-  jae .move_cursor_to
-
-  jmp .wait_for_key
+  cmp dh, 1
+  je .done
+  dec dh
+  call clamp_to_line
+  jmp .update
 
 .down:
-  cmp byte [CURSOR+1], MAX_ROWS-1
-  je .wait_for_key
-  inc byte [CURSOR+1]
+  cmp dh, MAX_ROWS-1
+  je .done
 
-  movzx bx, byte [CURSOR+1]
-  mov cl, byte [lines_len + bx]
-  cmp byte [CURSOR], cl
-  jae .move_cursor_to
+  movzx bx, dh
+  inc bx
+  cmp byte [line_length + bx], 0
+  je .done                       ; if next line is empty, don't go down
 
-  jmp .wait_for_key
+  inc dh
+  call clamp_to_line
+  jmp .update
 
-; move_cursor_to(cl: u8 x_position)
-.move_cursor_to:
-  mov byte [CURSOR], cl
-  jmp .wait_for_key
+.update:
+  call set_cursor
+.done:
+  stc
+  ret
 
-.return:
-  cmp byte [CURSOR+1], MAX_ROWS -1
-  je .wait_for_key
-
-  inc byte [CURSOR+1]
-  mov byte [CURSOR], 0
-  jmp .wait_for_key
-
-.backspace:
-  cmp byte [CURSOR], 0
-  je .wait_for_key                ; nop if beginning of line
-
-  movzx bx, byte [CURSOR+1]
-  mov cl, byte [lines_len + bx]   ; get line length
+control_key:
+  cmp ax, 0x0e08 ; backspace
+  je .handled
+  cmp ax, 0x1c0D ; enter
+  je .handled
+  cmp ax, 0x0f09 ; tab
+  je .handled
+  clc
+  ret
+.handled:
+  stc
+  ret
   
-  cmp byte [CURSOR], cl           ; check if at end of line before decrementing
-  je .at_end_of_line
-  
-  dec byte [CURSOR]
-  mov al, 0x20
-  call write_char
-  jmp .write_and_redraw
-  
-.at_end_of_line:
-  dec byte [lines_len + bx]       ; decrease line length
-  dec byte [CURSOR]               ; move cursor back
-  xor al, al                      ; null character
-  
-.write_and_redraw:
-  mov cx, [CURSOR+1]
-  call draw_line
 
-  jmp .wait_for_key
+; print_char(al: u8)
+; print printable char
+print_char:
+  pusha
+    cmp al, 0x0D
+    je .print
+    cmp al, 0x0A
+    je .print
+    cmp al, 0x00
+    je .print
 
-; draw_cursor(void) -> void
-; Positions the terminal cursor where the logical cursor is
-draw_cursor:
-  xor bh, bh        ; Page number = 0
+    cmp al, 32
+    jb .done
+    cmp al, 126
+    ja .done
+.print:
+    mov ah, 0x0e
+    xor bh, bh
+    int 0x10
+.done:
+  popa
+  ret
+
+; insert_char(al: u8 char, dh: line, dl: column)
+; pos = sum (lines before this) + cursor
+insert_char:
+  push ax
+    call get_buffer_position
+    mov di, ax
+  pop ax
+  push di
+    call push_right
+  pop di
+  mov byte [FILE_BUFFER + 24 + di], al
+
+  movzx bx, dh
+  inc byte [line_length + bx]
+  ret
+
+
+; splits the buffer at di and pushes the right-hand side by one to accommodate
+; for a new character
+push_right:
+  mov bx, MAX_LEN - 1
+  mov cx, bx
+  sub cx, di
+  inc cx
+  lea si, [FILE_BUFFER + 24 + bx]
+  lea di, [FILE_BUFFER + 24 + bx + 1]
+  std
+  repe movsb
+  cld
+  ret
+
+
+; returns the logical position in the buffer corresponding to the current
+; cursor position
+get_buffer_position:
+  xor ax, ax                        ; ax will be the position in the buffer  
+  movzx bx, dh
+  cmp dh, 0
+  jmp .current_line                 ; no sum of previous lines, if is first
+  movzx cx, dh                      ; repeat dh times
+  dec bx                            ; previous lines, not current
+.sum_loop:
+  add al, byte [line_length + bx]
+  dec bx
+  loop .sum_loop
+.current_line:
+  add al, dl
+  ret
+
+; get_cursor() -> (dh: line, dl: column)
+get_cursor:
+  mov ah, 0x03
+  xor bh, bh
+  int 0x10
+  ret
+
+; set_cursor(dh: line, dl: column) -> void
+set_cursor:
   mov ah, 0x02      ; Set cursor position function
-  mov dx, [CURSOR]
+  xor bh, bh        ; Page number = 0
   int 0x10
   ret
 
-; write_char(al: u8 char) -> void
-; Writes the char in al at LINES_BUFFER_BASE[CURSOR.Y][CURSOR.X]
-write_char:
-  movzx bx, byte [CURSOR+1]
-  mov cl, byte [lines_len + bx]         ; get line length
-  mov dl, byte [CURSOR]
-  cmp dl, cl
-  jb .write_to_buffer                   ; increase length if end of line
-  inc byte [lines_len + bx]
-  
-.write_to_buffer:
-  push bx                               ; save line index
-  shl bx, 6                             ; multiply by 64, line size
-  lea di, [LINES_BUFFER_BASE + bx]                  ; get pointer to line
-  pop bx                                ; restore line index
-  movzx bx, byte [CURSOR]               ; put col (X) in bx
-  mov byte [di + bx], al
-  ret
-
-; draw_buffer:
-;   mov cx, MAX_ROWS - 1     ; Start from the last line
-; .loop:
-;   push cx
-;   call draw_line
-;   pop cx
-;   dec cx                    ; Move to previous line
-;   jns .loop                 ; Continue until cx becomes negative
-;   ret
-
-; draw_line(cl: u8 index)
-; Draws line at index cl
-draw_line:
-  xor bh, bh                ; Page 0
-  mov ah, 0x02              ; Set cursor position
-  mov dh, cl                ; Row = cx (current line)
-  xor dl, dl                ; Column = 0
-  int 0x10
-
-  movzx bx, cl
-  movzx cx, byte [lines_len + bx]
-  shl bx, 6                         ; multiply by 64, line size
-  lea si, [LINES_BUFFER_BASE + bx]
-  call print_buffer
+; clamp_to_line()
+; Clamps curor coordinates within the current line. Does not update the cursor!
+clamp_to_line:
+  push bx
+    movzx bx, dh
+    cmp dl, byte [line_length + bx]
+    jbe .done
+    mov dl, byte [line_length + bx]
+.done:
+  pop bx
   ret
 
 ; print_buffer(si: u8* string, cx: count) -> void
@@ -186,14 +206,8 @@ print_buffer:
 .done:
   ret
 
-CURSOR dw 0x0000
-
 MAX_ROWS            equ 23
-MAX_COLS            equ 64
-LINES_BUFFER_BASE   equ 0x3000
-lines_len           db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-                    db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-
-times 510-($-$$) db 0
-dw 0xAA55
-; vim: ft=nasm tw=80 cc=+0 commentstring=;\ %s
+MAX_COLS            equ 80
+MAX_LEN             equ 1840
+FILE_BUFFER         equ 0x2000
+line_length         times MAX_ROWS db 0
