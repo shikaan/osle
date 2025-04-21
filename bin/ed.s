@@ -7,7 +7,7 @@ bits 16
 mov ax, 0x0003
 int 0x10
 
-mov dx, 0x0100
+mov dx, CURSOR_INIT
 call set_cursor
 
 wait_for_key:
@@ -82,6 +82,8 @@ arrow:
   stc
   ret
 
+; arrow(ax: u16 input, dh: line, dl: column)
+; Handles control keys. Sets carry flag if input is handled
 control_key:
   cmp ax, 0x0e08 ; backspace
   je .backspace
@@ -104,7 +106,7 @@ control_key:
   ret
 
 ; print_char(al: u8)
-; print printable char
+; Prints printable charachters plus carriage return and null byte.
 print_char:
   pusha
     cmp al, 0x0D
@@ -127,7 +129,7 @@ print_char:
   ret
 
 ; insert_char(al: u8 char, dh: line, dl: column)
-; pos = sum (lines before this) + cursor
+; Insert the char in al at the cursor position, moving the buffer around it.
 insert_char:
   push ax
     call get_buffer_position
@@ -136,50 +138,61 @@ insert_char:
   push di
     call push_right
   pop di
-  mov byte [FILE_BUFFER + 24 + di], al
+  mov byte [FILE_BUFFER + FILE_HEADER_SIZE + di], al
 
   movzx bx, dh
   inc byte [line_length + bx]
   inc word [file_data_len]
   ret
 
+; delete_char(dh: line, dl: column)
+; Deletes the char at the cursor position, moving the buffer around it.
 delete_char:
   call get_buffer_position
   mov di, ax
-  dec di
-  call push_left
+  call shift_left
   movzx bx, dh
   dec byte [line_length + bx]
   inc word [file_data_len]
   ret
 
-; splits the buffer at di and pushes the right-hand side by one to accommodate
-; for a new character
+; push_right(di: u16 logical_position)
+; Pushes the file buffer right from a given logical position
+;      buf: 11 22 33 44, di: 1
+;   becomes
+;     11 22 22 33 44
 push_right:
   mov bx, MAX_LEN - 1
   mov cx, bx
   sub cx, di
   inc cx
-  lea si, [FILE_BUFFER + 24 + bx]
-  lea di, [FILE_BUFFER + 24 + bx + 1]
+  lea si, [FILE_BUFFER + FILE_HEADER_SIZE + bx]
+  lea di, [FILE_BUFFER + FILE_HEADER_SIZE + bx + 1]
   std
   repe movsb
   cld
   ret
 
-push_left:
+; shift_left(di: u16 logical_position)
+; Shifts the file buffer left from a given logical position
+;      buf: 11 22 33 44, di: 1
+;   becomes
+;     11 33 44
+shift_left:
   mov bx, di
+  dec bx
   mov cx, MAX_LEN
-  sub cx, di
-  lea si, [FILE_BUFFER + 24 + bx + 1]
-  lea di, [FILE_BUFFER + 24 + bx]
+  sub cx, bx
+  lea si, [FILE_BUFFER + FILE_HEADER_SIZE + bx + 1]
+  lea di, [FILE_BUFFER + FILE_HEADER_SIZE + bx]
   cld
   repe movsb
   std
   ret
 
-; returns the logical position in the buffer corresponding to the current
-; cursor position
+; get_buffer_position(dh: line, dl: column)
+; Takes a visual cursor position and returns its logical position in the buffer
+; The calculation is: pos = sum(length of lines before current) + cursor
 get_buffer_position:
   xor ax, ax                        ; ax will be the position in the buffer  
   movzx bx, dh
@@ -196,6 +209,7 @@ get_buffer_position:
   ret
 
 ; get_cursor() -> (dh: line, dl: column)
+; Returns current visual cursor position
 get_cursor:
   mov ah, 0x03
   xor bh, bh
@@ -203,6 +217,7 @@ get_cursor:
   ret
 
 ; set_cursor(dh: line, dl: column) -> void
+; Sets visual cursor position
 set_cursor:
   mov ah, 0x02      ; Set cursor position function
   xor bh, bh        ; Page number = 0
@@ -210,7 +225,7 @@ set_cursor:
   ret
 
 ; clamp_to_line()
-; Clamps curor coordinates within the current line. Does not update the cursor!
+; Clamps cursor coordinates within the current line. Does not update the cursor!
 clamp_to_line:
   push bx
     movzx bx, dh
@@ -221,13 +236,14 @@ clamp_to_line:
   pop bx
   ret
 
-; prints the entire buffer on screen, restoring the cursor position
+; print_buffer(void)
+; Prints the entire buffer on screen, saving the cursor position.
 print_buffer:
   call get_cursor
   push dx
-    mov dx, 0x0100
+    mov dx, CURSOR_INIT
     call set_cursor
-    lea si, [FILE_BUFFER + 24]
+    lea si, [FILE_BUFFER + FILE_HEADER_SIZE]
     mov cx, [file_data_len]
 .loop:
     mov al, byte [si]
@@ -242,6 +258,8 @@ print_buffer:
 MAX_ROWS            equ 23
 MAX_COLS            equ 80
 MAX_LEN             equ MAX_COLS * MAX_ROWS
+FILE_HEADER_SIZE    equ 24
 FILE_BUFFER         equ 0x2000
+CURSOR_INIT         equ 0x0100
 file_data_len       dw 0x0000
 line_length         times MAX_ROWS db 0
