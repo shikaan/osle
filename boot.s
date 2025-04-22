@@ -46,7 +46,6 @@ shell:
 .print_prompt:
   mov al, '>'
   call scr_tty
-  push es
 
 .wait_for_key:
   xor ax, ax                      ; Function 0: Read Character
@@ -83,8 +82,7 @@ shell:
   int 0x10                        ; put null-byte on screen (i.e., delete)
 
   mov bx, [input_len]
-  mov di, INPUT_PTR
-  mov byte [di + bx], 0x0         ; remove last char from input
+  mov byte [INPUT_PTR + bx], 0x0  ; remove last char from input
   dec byte [input_len]            ; decrease input buffer size
 
   jmp .wait_for_key
@@ -111,17 +109,23 @@ shell:
   jc .cmd_error                   ; command is unknown
 
 .cmd_clear:
-    jmp boot
+  jmp boot
 
 .cmd_ls:
   call fs_list
   jmp .flush
 
 .cmd_run:
-  ; todo: implement check to see if file is executable
+  mov al, ' '
+  mov cx, 10
+  mov di, INPUT_PTR
+  repne scasb
+  mov byte [di - 1], 0
+
+  mov si, di
   mov di, INPUT_PTR
   call pm_exec
-  ret
+  jc .cmd_error                     ; only returns in case of errors
 
 .cmd_error:
   mov si, ERROR
@@ -131,7 +135,6 @@ shell:
 .flush:
   call sh_cr
   mov byte [input_len], 0
-  pop es
   jmp .print_prompt
 
 ; sh_cr(void)
@@ -304,7 +307,6 @@ fs_disk:
 fs_list:
   mov cx, FS_FILES
   mov dl, 1
-  cld
 .loop:
   pusha
     mov bx, FS_FILE_MEMORY
@@ -329,33 +331,45 @@ fs_list:
 ; The model for this OS is cooperative: the program that is started takes on
 ; the machine. It will return control to the main os by means of INT_RETURN
 ; interrupt.
-PM_SEGMENT  equ 0x2000
-PM_STACK    equ 0XFFFE
+PM_SEGMENT    equ 0x2000  ; Memory segment for guest apps: 0x2000:0-0xFFFF
+PM_ARGS       equ 0xFFBF  ; OS will pass arguments in this area to guests
+PM_STACK      equ 0XFFBE  ; Location of the guest's stack
 
-; pm_exec(di: u8* filename)
-; Loads a binary in the PM_SEGMENT and runs it. Sets carry flag upon failure.
-pm_exec:
-  mov bx, FS_FILE_MEMORY
-  int INT_FS_FIND
-  jc .done
-
-  lea si, [bx + FS_HEADER_SIZE]       ; prepare source (data segment of file)
-
+pm_switch_to_guest_segment:
   mov ax, PM_SEGMENT
   mov es, ax
-  xor di, di                          ; prepare destination (PM_SEGMENT)
+  ret
 
-  mov cx, word [bx + FS_NAME_SIZE]    ; only copy as many bytes as in the size
-  repe movsb                          ; copy!
+; pm_exec(di: u8* filename, si: u8* args)
+; Loads a binary in the PM_SEGMENT and runs it. Sets carry flag upon failure.
+pm_exec:
+  pusha
+    mov bx, FS_FILE_MEMORY
+    int INT_FS_FIND
+    jc .done
+  popa
 
-  mov ax, PM_SEGMENT
-  mov ds, ax                          ; guest DS = PM_SEGMENT
-  mov es, ax                          ; guest ES = PM_SEGMENT
-  mov ss, ax                          ; guest SS = PM_SEGMENT
-  mov sp, PM_STACK                    ; guest SP = Top of segment
+  call pm_switch_to_guest_segment
+  mov di, PM_ARGS
+  mov cx, INPUT_CAP
+  repe movsb
+
+  lea si, [FS_FILE_MEMORY + FS_HEADER_SIZE]       ; put file data in source
+
+  call pm_switch_to_guest_segment
+  xor di, di                                      ; select PM_SEGMENT as dest
+
+  mov cx, word [FS_FILE_MEMORY + FS_NAME_SIZE]    ; only copy `size` bytes
+  repe movsb
+
+  call pm_switch_to_guest_segment
+  mov ds, ax                                      ; guest DS = PM_SEGMENT
+  mov ss, ax                                      ; guest SS = PM_SEGMENT
+  mov sp, PM_STACK                                ; guest SP = Top of segment
 
   jmp PM_SEGMENT:0
 .done:
+  popa
   ret
 
 ; Data
@@ -368,7 +382,7 @@ ERROR     db 'error'
 
 input_len   db  0
 INPUT_PTR   equ 0x7E00
-INPUT_CAP   equ 0x80
+INPUT_CAP   equ 64
 
 INTERRUPT_COUNT equ 4
 INTERRUPTS:
