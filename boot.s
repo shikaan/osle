@@ -111,17 +111,7 @@ shell:
   jc .cmd_error                   ; command is unknown
 
 .cmd_clear:
-  mov ax, 0x0600                  ; scroll up and clear window
-  xor cx, cx                      ; top left corner = 0,0
-  mov dx, 0x184F                  ; bottom right corner = 18,4F
-  mov bh, 0x07                    ; set background color
-  int 0x10                        ; clear screen
-
-  mov dx, -1                      ; move at the top of the screen
-  mov ax, 0x0200
-  xor bh, bh
-  int 0x10
-  jmp .flush
+    jmp boot
 
 .cmd_ls:
   call fs_list
