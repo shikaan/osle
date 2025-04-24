@@ -1,9 +1,9 @@
+%include "sdk/osle.inc"
+%include "sdk/bochs.inc"
+
 ; Calling convention
 ;   - caller needs to preserve all registers, never the callee;
 ;   - ax is the return register;
-%macro debugger 0
-  xchg bx,bx
-%endmacro
 
 [org 0x7c00]
 bits 16
@@ -117,7 +117,7 @@ shell:
 
 .cmd_run:
   mov al, ' '
-  mov cx, 10
+  mov cx, FS_PATH_SIZE
   mov di, INPUT_PTR
   repne scasb
   mov byte [di - 1], 0
@@ -186,18 +186,6 @@ scr_tty:
 
 ; File System
 ; ===========
-; Files are stored on the floppy disk itself. To simplify lookups, we allocate
-; one file per track and use only one side. This means every file can be 9kb
-; (18 sectors * 512 bytes) and we can have 40 files in total.
-;
-; File Entry (9216 bytes)
-;   name  u8[22]    - name of the file
-;   size  u16       - file size in bytes
-;   data  u8[9192]  - file content
-FS_FILES        equ 40
-FS_NAME_SIZE    equ 22
-FS_HEADER_SIZE  equ 24
-FS_BLOCK_SIZE   equ 9216
 
 ; int_failure(void)
 ; Returns failure from an interrupt, setting the carry flag.
@@ -224,16 +212,16 @@ int_fs_find:
 .search_matching_block:
   pusha
     mov ah, 0x02
-    call fs_disk              ; read file at index dl
+    call fs_disk                  ; read file at index dl
     jc int_failure
 
-    mov cx, FS_NAME_SIZE
-    mov si, bx                ; put name in source register for comparison
+    mov cx, FS_PATH_SIZE
+    lea si, [bx + FS_PATH_OFFSET] ; put name in source register for comparison
 .compare_names:
     lodsb
     cmp al, byte [di]
     jne .break
-    test al, al               ; stop comparison if null char is encountered
+    test al, al                   ; stop comparison if null char is encountered
     je .found
     inc di
     loop .compare_names
@@ -248,7 +236,7 @@ int_fs_find:
   mov al, dl                  ; move file index in the return register
   jmp int_success
 
-; int_fs_create(di: u8* name, bx: u8* destination) -> (al: file_index)
+; int_fs_create(di: u8* path, bx: u8* destination) -> (al: file_index)
 ; Creates a new file and allocate memory for it in bx. Returns the file index
 ; in the range (0-40)
 int_fs_create:
@@ -270,8 +258,8 @@ int_fs_create:
   popa
   mov si, di
   mov di, bx
-  mov cx, FS_NAME_SIZE
-  call str_copy             ; write filename in the new file
+  mov cx, FS_PATH_SIZE
+  call str_copy             ; write path in the new file
   mov ah, 0x03
   call fs_disk              ; save on disk
   jc int_failure
@@ -311,12 +299,12 @@ fs_list:
   pusha
     mov bx, FS_FILE_MEMORY
     mov ah, 0x02
-    call fs_disk              ; read file at index dl
+    call fs_disk                  ; read file at index dl
 
     cmp byte [bx], 0
     je .continue
-    mov cx, FS_NAME_SIZE
-    mov si, bx                ; put name in source register for comparison
+    mov cx, FS_PATH_SIZE
+    lea si, [bx + FS_PATH_OFFSET] ; put name in source register for comparison
     call str_print
     call sh_cr
 .continue:
@@ -331,9 +319,8 @@ fs_list:
 ; The model for this OS is cooperative: the program that is started takes on
 ; the machine. It will return control to the main os by means of INT_RETURN
 ; interrupt.
-PM_SEGMENT    equ 0x2000  ; Memory segment for guest apps: 0x2000:0-0xFFFF
-PM_ARGS       equ 0xFFBF  ; OS will pass arguments in this area to guests
-PM_STACK      equ 0XFFBE  ; Location of the guest's stack
+PM_SEGMENT    equ 0x2000
+PM_STACK      equ 0XFFBE
 
 pm_switch_to_guest_segment:
   mov ax, PM_SEGMENT
@@ -352,14 +339,14 @@ pm_exec:
   call pm_switch_to_guest_segment
   mov di, PM_ARGS
   mov cx, INPUT_CAP
-  repe movsb
+  repe movsb                                      ; copy args in args section
 
-  lea si, [FS_FILE_MEMORY + FS_HEADER_SIZE]       ; put file data in source
+.copy_executable:
+  lea si, [FS_FILE_MEMORY + FS_DATA_OFFSET]       ; put file data in source
 
-  call pm_switch_to_guest_segment
   xor di, di                                      ; select PM_SEGMENT as dest
 
-  mov cx, word [FS_FILE_MEMORY + FS_NAME_SIZE]    ; only copy `size` bytes
+  mov cx, word [FS_FILE_MEMORY + FS_SIZE_OFFSET]  ; only copy `size` bytes
   repe movsb
 
   call pm_switch_to_guest_segment
@@ -378,7 +365,7 @@ pm_exec:
 
 CLEAR     db 'cl', 0
 LS        db 'ls', 0
-ERROR     db 'error'
+ERROR     db 'err'
 
 input_len   db  0
 INPUT_PTR   equ 0x7E00
@@ -390,11 +377,6 @@ INTERRUPTS:
   dw int_fs_find
   dw int_fs_create
   dw int_fs_write
-
-INT_RETURN    equ 0x20
-INT_FS_FIND   equ 0x21
-INT_FS_CREATE equ 0x22
-INT_FS_WRITE  equ 0x23
 
 ; Pad the file to reach 510 byte and add boot signature at the end.
 times 510-($-$$) db 0

@@ -5,7 +5,7 @@ ASFLAGS:=-f bin
 .PHONY: osle_test
 osle_test: osle.o bin/snake.bin test/fs.bin fixtures/text.txt.bin bin/ed.bin bin/more.bin
 	dd if=/dev/zero of=osle.img bs=512 count=2880
-	dd if=boot.o of=osle.img bs=512 count=1 conv=notrunc
+	dd if=osle.o of=osle.img bs=512 count=1 conv=notrunc
 	dd if=bin/snake.bin of=osle.img bs=512 seek=36 conv=notrunc
 	dd if=test/fs.bin of=osle.img bs=512 seek=72 conv=notrunc
 	dd if=fixtures/text.txt.bin of=osle.img bs=512 seek=108 conv=notrunc
@@ -15,7 +15,7 @@ osle_test: osle.o bin/snake.bin test/fs.bin fixtures/text.txt.bin bin/ed.bin bin
 .PHONY: osle
 osle: osle.o bin/snake.bin bin/ed.bin bin/more.bin
 	dd if=/dev/zero of=osle.img bs=512 count=2880
-	dd if=boot.o of=osle.img bs=512 count=1 conv=notrunc
+	dd if=osle.o of=osle.img bs=512 count=1 conv=notrunc
 	dd if=bin/snake.bin of=osle.img bs=512 seek=36 conv=notrunc
 	dd if=bin/ed.bin of=osle.img bs=512 seek=72 conv=notrunc
 	dd if=bin/more.bin of=osle.img bs=512 seek=108 conv=notrunc

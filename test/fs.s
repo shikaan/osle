@@ -1,12 +1,7 @@
-%macro debugger 0
-  xchg bx,bx
-%endmacro
+%include "sdk/osle.inc"
+%include "sdk/bochs.inc"
 
-INT_RETURN    equ 0x20
-INT_FS_FIND   equ 0x21
-INT_FS_CREATE equ 0x22
-INT_FS_WRITE  equ 0x23
-
+[org 0]
 bits 16
 
 mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
@@ -46,28 +41,28 @@ pusha
 popa
 
 ; Updates the newly created file
-mov word [bx + 24], 0xbeef
+mov word [bx + FS_DATA_OFFSET], 0xbeef
 mov dl, al
 int INT_FS_WRITE
 jc fail
-mov word [bx + 24], 0x0000 ; clean memory
+mov word [bx + FS_DATA_OFFSET], 0x0000 ; clean memory
 mov di, filename
 int INT_FS_FIND
 jc fail
-cmp word [bx + 24], 0xbeef
+cmp word [bx + FS_DATA_OFFSET], 0xbeef
 mov si, UPDATE
 jne fail
 call ok
 
 ; Renames the newly created file
 mov si, new_file
-mov di, bx
+lea di, [bx + FS_PATH_OFFSET]
 mov cx, filename_len
 repe movsb
-int 0x23
+int INT_FS_WRITE
 jc fail
 mov di, new_file
-int 0x21
+int INT_FS_FIND
 mov si, RENAME
 jc fail
 call ok
@@ -79,7 +74,7 @@ done:
   int 0x16
 
   cmp al, 0x0D                    ; key is ENTER
-  int 0x20
+  int INT_RETURN
 
 ok:
   call str_print
@@ -120,7 +115,7 @@ UPDATE:     db "update   ", 0
 MSG:    db  0x0D, 0x0A, "Total: 5", 0x0D, 0x0A, "Press RETURN to continue", 0
 
 new_file: db "aaaa.txt", 0
-filename: db "test.txt", 0
+filename: db "text.txt", 0
 filename_len equ $-filename
 this_file: db "fs"
 

@@ -1,20 +1,18 @@
-%macro debugger 0
-  xchg bx,bx
-%endmacro
+%include "sdk/osle.inc"
+%include "sdk/bochs.inc"
 
 bits 16
 
 mov ax, 0x0003  ; Set video mode: 80x25 text mode, color
 int 0x10
 
-mov di, 0xFFBF
+mov di, PM_ARGS
 mov bx, FILE_BUFFER_ADDR
-int 0x21
+int INT_FS_FIND
 jc fail
 
-; debugger
-mov cx, [bx + 22]
-lea si, [bx + 24]
+mov cx, [bx + FS_SIZE_OFFSET]
+lea si, [bx + FS_DATA_OFFSET]
 call print_buffer
 mov si, MSG
 mov cx, MSG_LEN
@@ -33,7 +31,7 @@ fail:
 done:
   xor ax, ax
   int 0x16
-  int 0x20
+  int INT_RETURN
   jmp $
 
 print_string:
@@ -55,10 +53,10 @@ print_buffer:
   loop .loop
   ret
 
-FILE_BUFFER_ADDR equ 0x4000
 ERROR: db "Cannot read file", 0
 ERROR_LEN equ $-ERROR
 MSG: db 0x0A, 0x0D, 0x0A, 0x0D, "Press any key to continue", 0
 MSG_LEN equ $-MSG
+FILE_BUFFER_ADDR equ 0x4000
 
 ; vim: ft=nasm tw=80 cc=+0 commentstring=;\ %s

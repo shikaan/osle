@@ -1,6 +1,5 @@
-%macro debugger 0
-  xchg bx,bx
-%endmacro
+%include "sdk/osle.inc"
+%include "sdk/bochs.inc"
 
 bits 16
 
