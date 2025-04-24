@@ -9,6 +9,7 @@ int 0x10
 
 ; Tries to locate this file (which surely exists)
 mov di, this_file
+mov bx, FILE_BUFFER_ADDR
 int INT_FS_FIND
 mov si, FIND_EXT
 jc fail
@@ -16,7 +17,6 @@ call ok
 
 ; Creates a new file whose name is `filename`
 mov di, filename
-mov bx, FILE_BUFFER_ADDR
 int INT_FS_CREATE
 mov si, CREATE
 jc fail
@@ -112,7 +112,7 @@ NAME:       db "name     ", 0
 RENAME:     db "rename   ", 0
 UPDATE:     db "update   ", 0
 
-MSG:    db  0x0D, 0x0A, "Total: 5", 0x0D, 0x0A, "Press RETURN to continue", 0
+MSG:    db  0x0D, 0x0A, "Total: 6", 0x0D, 0x0A, "Press RETURN to continue", 0
 
 new_file: db "aaaa.txt", 0
 filename: db "text.txt", 0
