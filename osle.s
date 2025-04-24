@@ -75,7 +75,7 @@ shell:
   je .wait_for_key                ; nop if input is empty
 
   call scr_tty                    ; print backspace (move backwards)
-  
+
   mov ax, 0x0A00                  ; 0A: write character, 00: null-byte
   xor bh, bh                      ; page = 0
   mov cx, 1                       ; how many repetitions?
@@ -88,9 +88,6 @@ shell:
   jmp .wait_for_key
 
 .cmd:
-  cmp byte [input_len], 0
-  je .flush                       ; reprint prompt if input is empty
-
   call sh_cr
 
   mov cx, 3                       ; all commands below have length 3
@@ -207,6 +204,9 @@ int_success:
 ; Look for a file with a given name. Sets carry flag in case of failure.
 FS_FILE_MEMORY equ 0x7E80
 int_fs_find:
+  cmp byte [di], 0
+  je int_failure                  ; bail if path is empty
+
   mov cx, FS_FILES
   mov dl, 1
 .search_matching_block:
@@ -240,6 +240,9 @@ int_fs_find:
 ; Creates a new file and allocate memory for it in bx. Returns the file index
 ; in the range (0-40)
 int_fs_create:
+  cmp byte [di], 0
+  je int_failure           ; bail if path is empty
+
   mov cx, FS_FILES
   mov dl, 1
 .search_empty_block:
@@ -337,13 +340,24 @@ pm_exec:
   popa
 
   call pm_switch_to_guest_segment
+
+  xor ax, ax                                      ; zero guest sector for good
+  mov cx, 0xFFFF                                  ;   measure
+  mov di, PM_SEGMENT
+  repe stosb
+
+  mov cx, INPUT_PTR
+  add cx, [input_len]
+  cmp si, cx                                      ; if si > input_len, means no
+  jae .copy_executable                            ; argument needs to be passed
+
   mov di, PM_ARGS
   mov cx, INPUT_CAP
   repe movsb                                      ; copy args in args section
 
 .copy_executable:
   lea si, [FS_FILE_MEMORY + FS_DATA_OFFSET]       ; put file data in source
-
+  
   xor di, di                                      ; select PM_SEGMENT as dest
 
   mov cx, word [FS_FILE_MEMORY + FS_SIZE_OFFSET]  ; only copy `size` bytes
