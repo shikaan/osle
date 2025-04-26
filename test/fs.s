@@ -18,9 +18,11 @@ call ok
 ; Creates a new file whose name is `filename`
 mov di, filename
 int INT_FS_CREATE
+mov byte [file_handle], al
 mov si, CREATE
 jc fail
 call ok
+
 
 ; Reads the name of the newly created file
 mov cx, filename_len
@@ -41,11 +43,13 @@ pusha
 popa
 
 ; Updates the newly created file
+mov bx, FILE_BUFFER_ADDR
 mov word [bx + FS_DATA_OFFSET], 0xbeef
-mov dl, al
+mov dl, byte [file_handle]
 int INT_FS_WRITE
 jc fail
-mov word [bx + FS_DATA_OFFSET], 0x0000 ; clean memory
+call clean_file_buffer
+mov bx, FILE_BUFFER_ADDR
 mov di, filename
 int INT_FS_FIND
 jc fail
@@ -59,6 +63,8 @@ mov si, new_file
 lea di, [bx + FS_PATH_OFFSET]
 mov cx, filename_len
 repe movsb
+mov bx, FILE_BUFFER_ADDR
+mov dl, byte [file_handle]
 int INT_FS_WRITE
 jc fail
 mov di, new_file
@@ -100,6 +106,15 @@ str_print:
 .done:
   ret
 
+clean_file_buffer:
+  mov cx, FS_BLOCK_SIZE
+  mov di, FILE_BUFFER_ADDR
+.loop:
+  mov byte [di], 0
+  inc di
+  loop .loop
+  ret
+
 FILE_BUFFER_ADDR equ 0x4000
 
 OK:   db " OK ", 0x0D, 0x0A, 0
@@ -114,8 +129,9 @@ UPDATE:     db "update   ", 0
 
 MSG:    db  0x0D, 0x0A, "Total: 6", 0x0D, 0x0A, "Press RETURN to continue", 0
 
+file_handle: db 0x00
 new_file: db "aaaa.txt", 0
-filename: db "text.txt", 0
+filename: db "file.txt", 0
 filename_len equ $-filename
 this_file: db "fs"
 
