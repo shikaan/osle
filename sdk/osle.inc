@@ -5,19 +5,19 @@
 %define OSLE_SDK
 ; ==== INTERRUPTS ====
 ;
-; Interrupts are exposed only for I/O operations where OSle is opinionated. 
+; Interrupts are exposed only for I/O operations where OSle is opinionated.
 ; You are encouraged to use appropriate BIOS interrupts for all other
-; standard I/O operations (e.g., clear screen, print chars).   
+; standard I/O operations (e.g., clear screen, print chars).
 
 ; INT_RETURN(void) -> void
 ; Returns control back to OSle. Use it to exit from a running program and give
 ; control back to the OS.
 ;
 ; NOTE
-; OSle process management is cooperative: while your app is running, _nothing 
-; else_ is. Ensure you return control to the OS at some point; otherwise, the 
+; OSle process management is cooperative: while your app is running, _nothing
+; else_ is. Ensure you return control to the OS at some point; otherwise, the
 ; machine will hang.
-; 
+;
 ; Usage:
 ;     int INT_RETURN
 ;
@@ -36,7 +36,7 @@ INT_RETURN    equ 0x20
 ;
 ; NOTE
 ; The bx buffer will include the _entire_ file, headers included. See FILE
-; SYSTEM for details. 
+; SYSTEM for details.
 ;
 ; Usage:
 ;   mov bx, 0x4000
@@ -61,7 +61,7 @@ INT_FS_FIND   equ 0x21
 ;
 ; NOTE
 ; The bx buffer will include the _entire_ file, headers included. See FILE
-; SYSTEM for details. 
+; SYSTEM for details.
 ;
 ; Usage:
 ;   mov bx, 0x4000
@@ -72,12 +72,11 @@ INT_FS_FIND   equ 0x21
 ;
 INT_FS_CREATE equ 0x22
 
-; INT_FS_WRITE(bx: u8* src_buffer, dl: file_handle) -> (al: file_handle, CF)
-; Writes the file identified by dl to disk, updating its data with the content 
+; INT_FS_WRITE(bx: u8* src_buffer, dl: file_handle) -> (CF)
+; Writes the file identified by dl to disk, updating its data with the content
 ; in bx.
 ;
 ; In case of failure, the carry flag is set.
-; The file handle needed for subsequent write operations is returned in al.
 ;
 ; Usage:
 ;   mov bx, 0x4000
@@ -105,9 +104,9 @@ PM_ARGS     equ 0xFFBF
 
 ; ==== FILE SYSTEM ====
 ;
-; Files are stored on the floppy disk where OSle lives. To simplify lookups in 
+; Files are stored on the floppy disk where OSle lives. To simplify lookups in
 ; our constrained space, OSle allocates one file per track and only uses one
-; side. Consequently, every file can only occupy up to 9KB in size 
+; side. Consequently, every file can only occupy up to 9KB in size
 ; (18 sectors * 512 bytes) and there will only be 40 files in total.
 ; File operations return a file handle, which is the index (1-39) of the file on
 ; the disk.
@@ -125,7 +124,7 @@ PM_ARGS     equ 0xFFBF
 FS_FILES        equ 40
 
 ; FS_PATH_OFFSET
-; Offset from which to start reading the file path in the file buffer. 
+; Offset from which to start reading the file path in the file buffer.
 ; The path is a null-terminated string with max length of FS_PATH_SIZE.
 ;
 ; Usage:
@@ -139,7 +138,7 @@ FS_PATH_OFFSET  equ 0
 FS_PATH_SIZE    equ 22
 
 ; FS_SIZE_OFFSET
-; Offset from which to start reading the file size in the file buffer. 
+; Offset from which to start reading the file size in the file buffer.
 ; The size is a 16-bit word representing the file size in bytes.
 ;
 ; Usage:
@@ -158,10 +157,10 @@ FS_SIZE_SIZE    equ 2
 FS_HEADER_SIZE  equ FS_PATH_SIZE + FS_SIZE_SIZE
 
 ; FS_DATA_OFFSET
-; Offset from which to start reading the file data in the file buffer. 
-; 
+; Offset from which to start reading the file data in the file buffer.
+;
 ; Usage:
-;   mov bx, [FILE_BUFFER + FS_DATA_OFFSET] ; bx points to the file data 
+;   mov bx, [FILE_BUFFER + FS_DATA_OFFSET] ; bx points to the file data
 FS_DATA_OFFSET  equ FS_HEADER_SIZE
 
 ; FS_BLOCK_SIZE
