@@ -90,20 +90,22 @@ shell:
 .cmd:
   call sh_cr
 
-  mov cx, 3                       ; all commands below have length 3
-
-  mov di, INPUT_PTR
   mov si, CLEAR
-  repe cmpsb
+  call .cmp_cmd
   je .cmd_clear                   ; command is the builtin clear
 
-  mov di, INPUT_PTR
   mov si, LS
-  repe cmpsb
+  call .cmp_cmd
   je .cmd_ls                      ; command is the builtin ls
 
   call .cmd_run                   ; command is the builtin run
   jc .cmd_error                   ; command is unknown
+
+.cmp_cmd:
+  mov cx, 3
+  mov di, INPUT_PTR
+  repe cmpsb
+  ret
 
 .cmd_clear:
   jmp boot
@@ -126,7 +128,7 @@ shell:
 
 .cmd_error:
   mov si, ERROR
-  mov cx, 5
+  mov cx, ERROR_LEN
   call str_print
 
 .flush:
@@ -211,8 +213,7 @@ int_fs_find:
   mov dl, 1
 .search_matching_block:
   pusha
-    mov ah, 0x02
-    call fs_disk                  ; read file at index dl
+    call fs_read
     jc int_failure
 
     mov cx, FS_PATH_SIZE
@@ -247,8 +248,7 @@ int_fs_create:
   mov dl, 1
 .search_empty_block:
   pusha
-    mov ah, 0x02            ; read current track
-    call fs_disk
+    call fs_read
     jc int_failure
 
     cmp byte [bx], 0        ; a file with an empty name is considered empty
@@ -259,12 +259,13 @@ int_fs_create:
   jmp int_failure
 .found:
   popa
-  mov si, di
-  mov di, bx
-  mov cx, FS_PATH_SIZE
-  call str_copy             ; write path in the new file
-  mov ah, 0x03
-  call fs_disk              ; save on disk
+  push dx
+    mov si, di
+    mov di, bx
+    mov cx, FS_PATH_SIZE
+    call str_copy             ; write path in the new file
+    call fs_write
+  pop ax
   jc int_failure
 
   jmp int_success
@@ -272,8 +273,7 @@ int_fs_create:
 ; int_fs_write(bx: u8* file_buffer, dl: file_index)
 ; Writes the input buffer to the file whose index is dl.
 int_fs_write:
-  mov ah, 0x03
-  call fs_disk      ; save buffer on disk
+  call fs_write      ; save buffer on disk
   jc int_failure
   jmp int_success
 
@@ -285,11 +285,15 @@ int_fs_write:
 ;   - One file per track
 ;   - All ops are on the whole track
 ;   - Only one side of drive A
+fs_read:
+  mov ax, 0x0212  ; al = 12 means 18 sectors
+  jmp fs_disk
+fs_write:
+  mov ax, 0x0312  ; al = 12 means 18 sectors
 fs_disk:
-  mov al, 0x12 ; al = 18 sectors
-  mov ch, dl   ; track number (i.e., the file index)
-  mov cl, 1    ; start from sector 1
-  xor dx, dx   ; dh = 0 (drive A), dl = head 0
+  mov ch, dl      ; track number (i.e., the file index)
+  mov cl, 1       ; start from sector 1
+  xor dx, dx      ; dh = 0 (drive A), dl = head 0
   int 0x13
   ret
 
@@ -301,8 +305,7 @@ fs_list:
 .loop:
   pusha
     mov bx, FS_FILE_MEMORY
-    mov ah, 0x02
-    call fs_disk                  ; read file at index dl
+    call fs_read
 
     cmp byte [bx], 0
     je .continue
@@ -357,7 +360,7 @@ pm_exec:
 
 .copy_executable:
   lea si, [FS_FILE_MEMORY + FS_DATA_OFFSET]       ; put file data in source
-  
+
   xor di, di                                      ; select PM_SEGMENT as dest
 
   mov cx, word [FS_FILE_MEMORY + FS_SIZE_OFFSET]  ; only copy `size` bytes
@@ -379,7 +382,8 @@ pm_exec:
 
 CLEAR     db 'cl', 0
 LS        db 'ls', 0
-ERROR     db 'err'
+ERROR     db 'ERR'
+ERROR_LEN equ $-ERROR
 
 input_len   db  0
 INPUT_PTR   equ 0x7E00
