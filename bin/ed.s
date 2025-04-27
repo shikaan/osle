@@ -592,7 +592,7 @@ INSTRUCTIONS:           db "          [^S] Save                      "
                         db "                      [^Q] Quit          "
 INSTRUCTIONS_LEN        equ $-INSTRUCTIONS
 
-NEW_FILE:               db "new.txt"
+NEW_FILE:               db "new.txt",0
 NEW_FILE_LEN            equ $-NEW_FILE
 
 NOTIFICATION_SAVED      db "[ File saved ]"
