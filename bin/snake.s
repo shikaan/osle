@@ -1,8 +1,6 @@
 ; https://gitlab.com/pmikkelsen/asm_snake
 
 bits 16
-mov	ax, 0x2000 
-mov	ds, ax		; set DS to the point where code is loaded
 mov	ah, 0x01
 mov	cx, 0x2000
 int 	0x10		; clear cursor blinking
