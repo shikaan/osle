@@ -1,0 +1,76 @@
+name: Build and Release OSle
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up dependencies
+      run: |
+        # sudo apt-get update
+        sudo apt-get install -y nasm
+
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm
+
+    - name: Build OSle
+      run: make osle
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: osle-img
+        path: ./osle.img
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Download Build Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: osle-img
+
+    - uses: benjlevesque/short-sha@v3.0
+      id: short-sha
+      with:
+        length: 7
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.short-sha.outputs.sha }}
+        release_name: OSle v${{ steps.short-sha.outputs.sha }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./osle.img
+        asset_name: osle.img
+        asset_content_type: application/octet-stream
