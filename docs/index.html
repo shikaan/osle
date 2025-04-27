@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>OSle preview</title>
+  <script src="https://unpkg.com/v86@0.5.43/build/libv86.js"></script>
+</head>
+
+<body>
+  <div id="screen_container">
+    <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+    <canvas style="display: none"></canvas>
+  </div>
+
+  <script>
+    new V86({
+      wasm_path: "https://unpkg.com/v86@0.5.43/build/v86.wasm",
+      memory_size: 32 * 1024 * 1024,
+      vga_memory_size: 2 * 1024 * 1024,
+      screen_container: document.getElementById("screen_container"),
+      bios: {
+        url: 'seabios.img'
+      },
+      vga_bios: {
+        url: 'vgabios.img'
+      },
+      fda: {
+        url: 'osle.img'
+      },
+      autostart: true,
+    })
+  </script>
+</body>
+</html>

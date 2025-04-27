@@ -40,3 +40,7 @@ debug: osle_test
 .PHONY: clean
 clean:
 	rm -rf *.img *.o *.bin **/*.o **/*.bin
+
+.PHONY: preview
+preview: osle
+	cp osle.img ./docs/
