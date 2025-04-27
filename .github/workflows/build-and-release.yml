@@ -14,17 +14,10 @@ jobs:
 
     steps:
     - name: Set up dependencies
-      run: |
-        # sudo apt-get update
-        sudo apt-get install -y nasm
+      run: sudo apt-get install -y nasm
 
     - name: Checkout code
       uses: actions/checkout@v3
-
-    - name: Set up dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y nasm
 
     - name: Build OSle
       run: make osle
