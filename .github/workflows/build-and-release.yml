@@ -3,8 +3,7 @@ name: Build and Release OSle
 on:
   push:
     branches:
-      - master
-      - ci
+      - main
 
 jobs:
   build:
@@ -25,7 +24,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
 
     steps:
     - name: Checkout code
