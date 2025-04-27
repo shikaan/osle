@@ -489,7 +489,7 @@ render_header:
     xor bx, bx                ; calculate length of the file name to render it
     mov cx, FS_PATH_SIZE
     lea si, [FILE_BUFFER + FS_PATH_OFFSET]
-.calculate_name_length
+.calculate_name_length:
     lodsb
     test al, al
     je .done_calculate_name_length
