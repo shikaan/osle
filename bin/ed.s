@@ -6,8 +6,20 @@ bits 16
 mov ax, 0x0003
 int 0x10
 
-mov dx, CURSOR_INIT
-call set_cursor
+mov di, PM_ARGS         ; try reading the file passed as argument, if any
+call open_file
+jnc initial_render
+
+mov si, NEW_FILE        ; write the default file name in the current file buffer
+mov cx, NEW_FILE_LEN
+mov di, FILE_BUFFER
+repe movsb
+
+initial_render:
+  call render
+
+  mov dx, CURSOR_INIT
+  call set_cursor
 
 wait_for_key:
   xor ax, ax
@@ -19,8 +31,11 @@ wait_for_key:
   call control_key
   jc wait_for_key
 
+  call is_printable
+  jne wait_for_key
+
   call insert_char
-  call print_buffer
+  call render
   call arrow.right
   jmp wait_for_key
 
@@ -51,7 +66,7 @@ arrow:
   movzx bx, dh
   cmp dl, byte [line_length + bx]
   jae .handled                       ; don't move right if end of line
-  
+
   inc dl
   jmp .update
 
@@ -84,14 +99,43 @@ arrow:
 ; arrow(ax: u16 input, dh: line, dl: column)
 ; Handles control keys. Sets carry flag if input is handled
 control_key:
-  cmp ax, 0x0e08 ; backspace
+  cmp ax, 0x0e08  ; backspace
   je .backspace
-  cmp ax, 0x1c0D ; enter
+  cmp ax, 0x1c0D  ; enter
   je .return
-  cmp ax, 0x0f09 ; tab
+  cmp ax, 0x0f09  ; tab
   je .handled
+  cmp ax, 0x1F13  ; Ctrl+S
+  je .save
+  cmp ax, 0x1011  ; Ctrl+Q
+  je .quit
   clc
   ret
+
+.save:
+  call save_file
+  jc .save_error
+  jmp .save_success
+
+.save_error:
+  mov si, NOTIFICATION_SAVE_ERROR
+  mov cx, NOTIFICATION_SAVE_ERROR_LEN
+  call render_notification
+  jmp .save_done
+
+.save_success:
+  mov si, NOTIFICATION_SAVED
+  mov cx, NOTIFICATION_SAVED_LEN
+  call render_notification
+  jmp .save_done
+
+.save_done:
+  call render_header                                  ; remove * from header
+  jmp .handled
+
+.quit:
+  int 0x20
+  jmp .handled
 
 .backspace:
   cmp dl, 0
@@ -111,7 +155,7 @@ control_key:
   call delete_char
   call arrow.left
 
-  call print_buffer
+  call render
   jmp .handled
 
 .return:
@@ -121,7 +165,7 @@ control_key:
   call insert_char
   mov al, 0x0A
   call insert_char
-  call print_buffer
+  call render
   inc dh
   mov dl, 0
   call set_cursor
@@ -131,8 +175,21 @@ control_key:
   stc
   ret
 
+; is_printable(al: u8)
+; Sets zero flag when al is a printable character
+is_printable:
+  cmp al, 32
+  jb .false
+  cmp al, 126
+  ja .false
+  cmp al, al    ; sets zero flag
+  ret
+.false:
+  cmp al, 32    ; clears zero flag (al cannot be 32)
+  ret
+
 ; print_char(al: u8)
-; Prints printable charachters plus carriage return, line feed, and null byte.
+; Prints printable characters plus carriage return, line feed, and null byte.
 print_char:
   pusha
     cmp al, 0x0D
@@ -142,11 +199,9 @@ print_char:
     cmp al, 0x00
     je .null
 
-    cmp al, 32
-    jb .done
-    cmp al, 126
-    ja .done
-    jmp .print
+    call is_printable
+    je .print
+    jmp .done
 
 .null:
     mov al, 0XFE
@@ -157,6 +212,22 @@ print_char:
     xor bh, bh
     int 0x10
 .done:
+  popa
+  ret
+
+; print_byte_inverted(al: u8)
+; Prints any character, regardless if they're printable, with inverted colors
+; (black on white).
+print_byte_inverted:
+  pusha
+    mov ah, 0x09      ; write character interrupt function
+    mov cx, 1
+    xor bh, bh
+    mov bl, 0x70      ; this means black on white
+    int 0x10
+    call get_cursor   ; we cannot use tty here (it doesn't support background),
+    inc dl            ;    we need to advance the cursor manually
+    call set_cursor
   popa
   ret
 
@@ -201,6 +272,7 @@ push_right:
   std
   repe movsb
   cld
+  mov byte [modified], 1
   ret
 
 ; shift_left(di: u16 logical_position)
@@ -217,14 +289,14 @@ shift_left:
   lea di, [FILE_BUFFER + FILE_HEADER_SIZE + bx]
   cld
   repe movsb
-  std
+  mov byte [modified], 1
   ret
 
 ; get_buffer_position(dh: line, dl: column)
 ; Takes a visual cursor position and returns its logical position in the buffer
 ; The calculation is: pos = sum(length of lines before current) + cursor
 get_buffer_position:
-  xor ax, ax                        ; ax will be the position in the buffer  
+  xor ax, ax                        ; ax will be the position in the buffer
   movzx bx, dh
   cmp dh, 1
   jbe .current_line                 ; no sum of previous lines, if is first
@@ -246,7 +318,7 @@ get_cursor:
   int 0x10
   ret
 
-; set_cursor(dh: line, dl: column) -> void
+; set_cursor(dh: line, dl: column)
 ; Sets visual cursor position
 set_cursor:
   mov ah, 0x02      ; Set cursor position function
@@ -266,17 +338,34 @@ clamp_to_line:
   pop bx
   ret
 
+; render(void)
+; Clears the screen, prints the headline, displays the buffer, recalculates line
+; lengths, and returns.
+render:
+  call clear_screen
+  call render_header
+  call render_footer
+  call print_buffer
+  call recalculate_line_lengths
+  ret
+
+; clear(void)
+; Issues the interrupt to clear the screen
+clear_screen:
+  pusha
+    mov ax, 0x0600
+    xor cx, cx
+    mov dx, 0x184F
+    mov bh, 0x07
+    int 0x10
+  popa
+  ret
+
 ; print_buffer(void)
 ; Prints the entire buffer on screen, saving the cursor position.
 print_buffer:
   call get_cursor
   push dx
-    mov ax, 0x0600                  ; scroll up and clear window
-    xor cx, cx                      ; top left corner = 0,0
-    mov dx, 0x184F                  ; bottom right corner = 18,4F
-    mov bh, 0x07                    ; set background color
-    int 0x10                        ; clear screen
-
     mov dx, CURSOR_INIT
     call set_cursor
     lea si, [FILE_BUFFER + FILE_HEADER_SIZE]
@@ -287,10 +376,8 @@ print_buffer:
     call print_char
     inc si
     loop .loop
-.done:
   pop dx
   call set_cursor
-  call recalculate_line_lengths
   ret
 
 ; recalculate_line_lengths(void)
@@ -302,6 +389,8 @@ recalculate_line_lengths:
     mov bx, 0                         ; buffer index
     mov dl, 0                         ; column index (index on a line)
     mov cx, [file_data_len]
+    cmp cx, 0
+    je .done
 .loop:
     mov ax, word [FILE_BUFFER + FILE_HEADER_SIZE + bx]
     cmp ax, CRLF
@@ -320,32 +409,215 @@ recalculate_line_lengths:
 .continue:
     loop .loop
     mov byte [line_length + di], dl
+.done:
   popa
   ret
 
 ; open_file(di: u8* filename)
-; Opens a file with a given name in the current buffer. Set carry on failure.
+; Opens a file with a given name in the current buffer. Sets carry on failure.
 open_file:
   mov bx, FILE_BUFFER
-  int 0x21
+  int INT_FS_FIND
   jc .done
 
-  mov ax, [bx + 22]
-  mov word [file_data_len], ax 
-
-  call print_buffer
+  mov byte [open_file_handle], al   ; store file handle
+  mov ax, [bx + FS_SIZE_OFFSET]
+  mov word [file_data_len], ax      ; store file size
 .done:
   ret
 
-MAX_ROWS            equ 23
-MAX_COLS            equ 80
-MAX_LEN             equ MAX_COLS * MAX_ROWS
-FILE_HEADER_SIZE    equ 24
-FILE_BUFFER         equ 0x2000
-CURSOR_INIT         equ 0x0100
-CRLF                equ 0x0D0A
-open_file_handle    db 0x00
-file_data_len       dw 0x0000
-line_length         times MAX_ROWS db 0
+; save_file(di: u8* filename)
+; Saves the current buffer to a file with specified name. If missing, the file
+; will be created. Sets carry on failure.
+save_file:
+  cmp byte [open_file_handle], 0              ; handle is zero only if no file
+  jne .save                                   ;   is open - create a file then
+
+.create_file_and_update_content:
+  lea si, [FILE_BUFFER + FS_DATA_OFFSET]      ; copy current buffer in a temp
+  mov di, TMP_BUFFER                          ;   area to safely open a new file
+  mov cx, word [file_data_len]
+  repe movsb
+
+  mov di, NEW_FILE                            ; create a new file and load it in
+  mov bx, FILE_BUFFER                         ;   the file buffer location
+  int INT_FS_CREATE
+  jc .done
+
+  mov byte [open_file_handle], al             ; copy data from the temp buffer
+  mov si, TMP_BUFFER                          ;   into the file buffer location
+  lea di, [FILE_BUFFER + FS_DATA_OFFSET]
+  mov cx, word [file_data_len]
+  repe movsb
+.save:
+  mov ax, word [file_data_len]                ; update file size
+  mov word [FILE_BUFFER + FS_SIZE_OFFSET], ax
+
+  mov bx, FILE_BUFFER                         ; write file on disk
+  mov dl, byte [open_file_handle]
+  int INT_FS_WRITE
+  jnc .done
+  mov byte [modified], 0                      ; unset modified flag on success
+.done:
+  ret
+
+; render_header(void)
+; Renders the top bar of the editor where name, file, and modified flag are.
+render_header:
+  call get_cursor
+  push dx                     ; save cursor to restore it at the end
+    xor dx, dx
+    call set_cursor
+
+    mov cx, MAX_COLS          ; print a full line of inverted null-bytes to make
+    mov al, 0                 ;   a white line
+.print_background:
+    call print_byte_inverted
+    loop .print_background
+
+    mov dx, HEADER_POSITION   ; reposition cursor to header text start
+    call set_cursor
+
+    mov si, NAME              ; print this programs name and version
+    mov cx, NAME_LEN
+.print_program_name:
+    mov al, byte [si]
+    call print_byte_inverted
+    inc si
+    loop .print_program_name
+
+    xor bx, bx                ; calculate length of the file name to render it
+    mov cx, FS_PATH_SIZE
+    lea si, [FILE_BUFFER + FS_PATH_OFFSET]
+.calculate_name_length
+    lodsb
+    test al, al
+    je .done_calculate_name_length
+    inc bx
+    loop .calculate_name_length
+
+.done_calculate_name_length:
+    push bx
+      shr bl, 1                 ; move the cursor in the middle of the bar
+      mov dl, MAX_COLS/2
+      sub dl, bl
+      call set_cursor
+    pop cx
+    lea si, [FILE_BUFFER + FS_PATH_OFFSET]  ; prints the filename
+.print_filename:
+    lodsb
+    call print_byte_inverted
+    loop .print_filename
+
+    cmp byte [modified], 0      ; signal modified file (i.e., changed but not
+    je .done                    ;   saved on disk) with an * next to the name
+    mov al, '*'
+
+    call print_byte_inverted
+.done:
+  pop dx
+  call set_cursor
+  ret
+
+; render_footer(void)
+; Renders the footer of the editor where instructions are printed.
+render_footer:
+  call get_cursor
+  push dx                     ; save cursor to restore it at the end
+    mov dx, FOOTER_POSITION
+    call set_cursor           ; position cursor on line 24/18h (bottom line)
+
+    mov si, INSTRUCTIONS
+    mov cx, INSTRUCTIONS_LEN
+    xor bx, bx                ; when bx = 1 we print black on white (invert),
+.print_instructions:          ;   else usual white on black
+    mov al, byte [si]
+
+    cmp al, '['               ; chars in [] will be inverted
+    je .set_invert            ;   [ starts inverting, ] ends inverting
+    cmp al, ']'
+    je .unset_invert
+
+    cmp bx, 1                 ; print inverted or normal based on bx
+    je .inverted_print
+    call print_char
+    jmp .continue
+
+.inverted_print:
+    call print_byte_inverted
+    jmp .continue
+
+.unset_invert:
+    xor bx, bx
+    jmp .continue
+
+.set_invert:
+    mov bx, 1
+    ; cascades
+
+.continue:
+    inc si
+    loop .print_instructions
+
+.done:
+  pop dx
+  call set_cursor
+  ret
+
+; render_notification(si: u8* message, cl: u8 message_len)
+; Renders a notification in the notification area. Notifications will disappear
+; on the next re-render.
+render_notification:
+  mov bx, cx
+  call get_cursor                   ; save cx and copy it in bx to modify it
+  mov cx, bx
+  push dx
+    mov dx, NOTIFICATION_POSITION
+    shr bl, 1                       ; divide string len by two
+    mov dl, MAX_COLS/2
+    sub dl, bl                      ; to print in the middle, start typing at
+    call set_cursor                 ;     pos = MAX_COLS/2 - str.len/2
+.print_message:
+    lodsb
+    call print_char
+    loop .print_message
+  pop dx
+  call set_cursor
+  ret
+
+NAME:                   db "ed v0.0.1", 0
+NAME_LEN                equ $-NAME
+
+INSTRUCTIONS:           db "          [^S] Save                      "
+                        db "                      [^Q] Quit          "
+INSTRUCTIONS_LEN        equ $-INSTRUCTIONS
+
+NEW_FILE:               db "new.txt"
+NEW_FILE_LEN            equ $-NEW_FILE
+
+NOTIFICATION_SAVED      db "[ File saved ]"
+NOTIFICATION_SAVED_LEN  equ $-NOTIFICATION_SAVED
+
+NOTIFICATION_SAVE_ERROR      db "[ ERROR unable to save ]"
+NOTIFICATION_SAVE_ERROR_LEN  equ $-NOTIFICATION_SAVE_ERROR
+
+MAX_ROWS              equ 23
+MAX_COLS              equ 80
+MAX_LEN               equ MAX_COLS * MAX_ROWS
+FILE_HEADER_SIZE      equ 24
+FILE_BUFFER           equ 0x9000
+TMP_BUFFER            equ 0x7000
+CURSOR_INIT           equ 0x0100
+CRLF                  equ 0x0D0A
+HEADER_POSITION       equ 0x0002  ; first line, third column
+FOOTER_POSITION       equ 0x1800  ; last line, third column
+NOTIFICATION_POSITION equ 0x1700  ; last but one line, first column
+
+open_file_handle      db 0x00               ; file handle of currently open file
+file_data_len         dw 0x0000             ; length of current file
+modified              db 0x00               ; it is 1 when the current file has
+                                            ;   changed but it's not saved yet
+line_length           times MAX_ROWS db 0   ; tracks the length of the lines in
+                                            ;   the buffer
 
 ; vim: ft=nasm tw=80 cc=+0 commentstring=;\ %s
