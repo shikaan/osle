@@ -4,4 +4,5 @@ test.s
 .bochsrc.test
 blog.md
 .todo
-./osle.img
+osle.img
+!./docs/osle.img
