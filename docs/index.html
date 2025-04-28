@@ -2,22 +2,124 @@
 <html>
 
 <head>
-  <title>OSle preview</title>
+  <title>OSle - A tiny but mighty OS</title>
+  <meta charset="UTF-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💾</text></svg>">
   <script src="https://unpkg.com/v86@0.5.43/build/libv86.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reseter.css/2.0.0/minireseter.min.css" integrity="sha512-26lCJWeu4qh1Kd3YpqH03s+Ju7qI9mqz48E8mPE/qIoucLUbkBx6oayTM+0T3mAdC1DdT1grtnFtJNwsB+8qzw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Iosevka/11.1.1/iosevka/iosevka.min.css" integrity="sha512-3hU20586NsplKRzjf2jQN5vTRTI2EsXObrHDOBLGdkiRkneg699BlmBXWGHHFHADCF3TOk2BREsVy7qTkmvQqQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    :root {
+      --white: #ffeecc;
+      --black: #46425e;
+      --primary-light: #00b9be;
+      --primary-dark: #15788c;
+      --secondary-light: #ffb0a3;
+      --secondary-dark: #ff6973;
+
+      --vspace-1: 16px;
+      --vspace-2: 24px;
+    }
+
+    body {
+      background-color: var(--white);
+      color: var(--black);
+      font-family: 'Iosevka Web';
+      font-size: 16px;
+    }
+
+    h2 {
+      color: var(--primary-light);
+      text-shadow: var(--primary-dark) -1px 1px;
+      padding-top: calc(var(--vspace-2));
+      padding-bottom: var(--vspace-1);
+      text-transform: uppercase;
+      font-weight: bold;
+      &::before {
+        content: '# ';
+      }
+    }
+
+    section, header {
+      width: 40em;
+      margin: auto;
+      padding: var(--vspace-1) 0;
+    }
+
+    header {
+      text-align: center;
+      small {
+        font-size: 1.5em;
+      }
+    }
+
+    #screen {
+      text-align: center;
+      & > div.rows {
+        white-space: pre;
+        line-height: 1em;
+      }
+    }
+
+    code {
+      background-color: var(--black);
+      color: var(--secondary-light);
+      padding: 0 4px;
+    }
+
+    ul {
+      list-style-type: disc;
+      list-style-position: inside;
+      li {
+        line-height: 2em;
+      }
+    }
+
+    p {
+      padding-top: var(--vspace-1);
+    }
+  </style>
 </head>
 
 <body>
-  <div id="screen_container">
-    <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+  <header>
+    <div>
+      <img src="logo.svg" alt="OSle logo">
+      <h1 hidden>OSle</h1>
+    </div>
+    <small>A tiny but mighty OS</small>
+  </header>
+
+  <main id="screen">
+    <div class="rows"></div>
     <canvas style="display: none"></canvas>
-  </div>
+  </main>
+
+  <section>
+    <h2>Instructions</h2>
+    <p>
+      Builtins
+      <ul>
+        <li><code>ls</code> list all available files and commands</li>
+        <li><code>cl</code> clear the screen</li>
+      </ul>
+    </p>
+    <p>
+      Programs
+      <ul>
+        <li><code>more</code> preview the content of a text file</li>
+        <li><code>snake</code> runs a snake game</li>
+        <li><code>ed &lt;file&gt;</code> text editor</li>
+      </ul>
+    </p>
+  </section>
 
   <script>
     new V86({
       wasm_path: "https://unpkg.com/v86@0.5.43/build/v86.wasm",
       memory_size: 32 * 1024 * 1024,
       vga_memory_size: 2 * 1024 * 1024,
-      screen_container: document.getElementById("screen_container"),
+      screen: { container: document.getElementById("screen") },
       bios: {
         url: 'seabios.img'
       },
