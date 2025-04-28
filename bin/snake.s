@@ -118,7 +118,7 @@ no_collision:
 	mov	[food_pos], dx	; save the position of the new random food
 	mov	byte [grow_snake_flag], 1 ; make sure snake grows
 game_loop_continued:
-	mov	cx, 0x0020	; Sleep for 0,15 seconds (cx:dx)
+  mov	cx, 0x0002	; Sleep for 0,15 seconds (cx:dx)
 	mov	dx, 0x49F0	; 0x000249F0 = 150000
 	mov	ah, 0x86
 	int	0x15		; Sleep
