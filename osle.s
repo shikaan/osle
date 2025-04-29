@@ -34,8 +34,6 @@ reset_screen:
   int 0x10
 
 main:
-; Definitions
-; ===========
 
 ; Shell
 ; -----
