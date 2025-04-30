@@ -133,6 +133,6 @@ file_handle: db 0x00
 new_file: db "aaaa.txt", 0
 filename: db "file.txt", 0
 filename_len equ $-filename
-this_file: db "fs"
+this_file: db "fs.test"
 
 ; vim: ft=nasm tw=80 cc=+0 commentstring=;\ %s
