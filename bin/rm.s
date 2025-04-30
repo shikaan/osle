@@ -5,6 +5,10 @@ mov al, 0x03
 int 0x10
 
 mov di, PM_ARGS
+cmp byte [di], 0
+mov si, ERR_INVALID_ARG
+je fail
+
 mov bx, FILE_BUFFER
 int INT_FS_FIND
 mov si, ERR_NOT_FOUND
@@ -62,12 +66,17 @@ str_print:
 fail:
   mov cx, 0xFF
   call str_print
+  mov cx, 0xFF
+  mov si, USAGE
+  call str_print
   jmp exit
 
-ERR_NOT_FOUND:  db "Unable to remove file: file not found", 0
-ERR_WRITE:      db "Unable to remove file: cannot write on file", 0
-SUCCESS:        db "Success!", 0
-RETURN:         db 0x0a, 0x0d, "Press any key to return", 0
+ERR_INVALID_ARG:  db "Invalid argument", 0
+ERR_NOT_FOUND:    db "File not found", 0
+ERR_WRITE:        db "Cannot edit file", 0
+SUCCESS:          db "Success!", 0
+RETURN:           db 0x0a, 0x0d, "Press any key to return", 0
+USAGE:            db 0x0a, 0x0d, 0x0a, 0x0d, "  Usage: rm <file>", 0x0a, 0x0d, 0
 
 FILE_BUFFER     equ 0x4000
 

@@ -118,13 +118,19 @@ is_printable:
 fail:
   mov cx, 0xFF
   call str_print
+  mov cx, 0xFF
+  mov si, USAGE
+  call str_print
   jmp exit
 
 ERR_NOT_FOUND:    db "Unable to find source file", 0
 ERR_INVALID_ARG:  db "Invalid arguments", 0
-ERR_WRITE:        db "Cannot write on destination file", 0
+ERR_WRITE:        db "Cannot edit file", 0
 SUCCESS:          db "Success!", 0
 RETURN:           db 0x0a, 0x0d, "Press any key to return", 0
+USAGE:            db 0x0a, 0x0d, 0x0a, 0x0d
+                  db "  Usage: mv <source-file> <destination-file>"
+                  db 0x0a, 0x0d, 0
 
 FILE_BUFFER       equ 0x4000
 SOURCE            equ 0x3000
