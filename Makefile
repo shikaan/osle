@@ -13,9 +13,10 @@ osle_test: osle fixtures/text.txt.bin test/fs.test.bin
 	dd if=bin/more.bin of=osle.img bs=512 seek=180 conv=notrunc
 	dd if=bin/rm.bin of=osle.img bs=512 seek=216 conv=notrunc
 	dd if=bin/mv.bin of=osle.img bs=512 seek=252 conv=notrunc
+	dd if=bin/help.bin of=osle.img bs=512 seek=288 conv=notrunc
 
 .PHONY: osle
-osle: osle.o bin/snake.bin bin/ed.bin bin/more.bin bin/rm.bin bin/mv.bin
+osle: osle.o bin/snake.bin bin/ed.bin bin/more.bin bin/rm.bin bin/mv.bin bin/help.bin
 	dd if=/dev/zero of=osle.img bs=512 count=2880
 	dd if=osle.o of=osle.img bs=512 count=1 conv=notrunc
 	dd if=bin/snake.bin of=osle.img bs=512 seek=36 conv=notrunc
@@ -23,6 +24,7 @@ osle: osle.o bin/snake.bin bin/ed.bin bin/more.bin bin/rm.bin bin/mv.bin
 	dd if=bin/more.bin of=osle.img bs=512 seek=108 conv=notrunc
 	dd if=bin/rm.bin of=osle.img bs=512 seek=144 conv=notrunc
 	dd if=bin/mv.bin of=osle.img bs=512 seek=180 conv=notrunc
+	dd if=bin/help.bin of=osle.img bs=512 seek=216 conv=notrunc
 
 %.bin: %.s
 	$(AS) $(ASFLAGS) -o $*.o $<
