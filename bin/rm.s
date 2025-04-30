@@ -4,13 +4,17 @@ mov ah, 0x00
 mov al, 0x03
 int 0x10
 
-mov di, PM_ARGS
-mov bx, FILE_BUFFER
+mov di, PM_ARGS           ; bail on missing argument
+cmp byte [di], 0
+mov si, ERR_INVALID_ARG
+je fail
+
+mov bx, FILE_BUFFER       ; try locate the argument file
 int INT_FS_FIND
 mov si, ERR_NOT_FOUND
 jc fail
 
-push ax
+push ax                   ; zero the whole file block
   mov cx, FS_BLOCK_SIZE
   mov di, FILE_BUFFER
 zero_byte:
@@ -19,13 +23,13 @@ zero_byte:
   loop zero_byte
 pop ax
 
-mov bx, FILE_BUFFER
+mov bx, FILE_BUFFER       ; write the block on disk
 mov dl, al
 int INT_FS_WRITE
 mov si, ERR_WRITE
 jc fail
 
-mov si, SUCCESS
+mov si, SUCCESS           ; communicate result to the user
 mov cx, 0xFF
 call str_print
 
@@ -62,12 +66,17 @@ str_print:
 fail:
   mov cx, 0xFF
   call str_print
+  mov cx, 0xFF
+  mov si, USAGE
+  call str_print
   jmp exit
 
-ERR_NOT_FOUND:  db "Unable to remove file: file not found", 0
-ERR_WRITE:      db "Unable to remove file: cannot write on file", 0
-SUCCESS:        db "Success!", 0
-RETURN:         db 0x0a, 0x0d, "Press any key to return", 0
+ERR_INVALID_ARG:  db "Invalid argument", 0
+ERR_NOT_FOUND:    db "File not found", 0
+ERR_WRITE:        db "Cannot edit file", 0
+SUCCESS:          db "Success!", 0
+RETURN:           db 0x0a, 0x0d, "Press any key to return", 0
+USAGE:            db 0x0a, 0x0d, 0x0a, 0x0d, "  Usage: rm <file>", 0x0a, 0x0d, 0
 
 FILE_BUFFER     equ 0x4000
 
