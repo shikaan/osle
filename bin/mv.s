@@ -6,7 +6,7 @@ mov ah, 0x00                  ; clean screen
 mov al, 0x03
 int 0x10
 
-mov si, PM_ARGS
+mov si, PM_ARGS               ; parse cli arguments replacing spaces with 0
 push si
 mov cx, FS_PATH_SIZE*2 + 1
 mov dx, 1
@@ -23,13 +23,13 @@ parse:
   inc si
   loop parse
 
-mov si, ERR_INVALID_ARG
+mov si, ERR_INVALID_ARG       ; if there aren't exactly two arguments, bail
 cmp dx, 2
 jne fail
 
 pop si
-mov word [DESTINATION], si
-mov cx, FS_PATH_SIZE
+mov word [DESTINATION], si    ; validate destination path:
+mov cx, FS_PATH_SIZE          ;   if there are non-printable chars, error
 validate:
   mov al, [si]
   call is_printable
@@ -40,35 +40,34 @@ validate:
 .continue:
   loop validate
   
-pop di
+pop di                        ; try locate the source file
 mov word [SOURCE], di
 mov bx, FILE_BUFFER
 int INT_FS_FIND
 mov si, ERR_NOT_FOUND
 jc fail
 
-; zero the name portion of the header
 push ax
   mov cx, FS_PATH_SIZE
   lea di, [FILE_BUFFER + FS_PATH_OFFSET]
-zero_byte:
+zero_byte:                    ; zero the name portion of the header
   mov byte [di], 0
   inc di
   loop zero_byte
 
-  mov si, [DESTINATION]
+  mov si, [DESTINATION]       ; copy the new file name in file header
   lea di, [FILE_BUFFER + FS_PATH_OFFSET]
   mov cx, FS_PATH_SIZE
   repe movsb
 pop ax
 
-mov bx, FILE_BUFFER
+mov bx, FILE_BUFFER           ; write file on disk
 mov dl, al
 int INT_FS_WRITE
 mov si, ERR_WRITE
 jc fail
 
-mov si, SUCCESS
+mov si, SUCCESS               ; communicate success to the user
 mov cx, 0xFF
 call str_print
 

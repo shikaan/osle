@@ -4,17 +4,17 @@ mov ah, 0x00
 mov al, 0x03
 int 0x10
 
-mov di, PM_ARGS
+mov di, PM_ARGS           ; bail on missing argument
 cmp byte [di], 0
 mov si, ERR_INVALID_ARG
 je fail
 
-mov bx, FILE_BUFFER
+mov bx, FILE_BUFFER       ; try locate the argument file
 int INT_FS_FIND
 mov si, ERR_NOT_FOUND
 jc fail
 
-push ax
+push ax                   ; zero the whole file block
   mov cx, FS_BLOCK_SIZE
   mov di, FILE_BUFFER
 zero_byte:
@@ -23,13 +23,13 @@ zero_byte:
   loop zero_byte
 pop ax
 
-mov bx, FILE_BUFFER
+mov bx, FILE_BUFFER       ; write the block on disk
 mov dl, al
 int INT_FS_WRITE
 mov si, ERR_WRITE
 jc fail
 
-mov si, SUCCESS
+mov si, SUCCESS           ; communicate result to the user
 mov cx, 0xFF
 call str_print
 
