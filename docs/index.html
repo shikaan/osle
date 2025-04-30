@@ -78,6 +78,10 @@
     p {
       padding-top: var(--vspace-1);
     }
+
+    .links {
+      text-align: center;
+    }
   </style>
 </head>
 
@@ -89,6 +93,9 @@
     </div>
     <small>A tiny but mighty OS</small>
   </header>
+  <section class="links">
+    <a href="https://github.com/shikaan/OSle">Code</a> | <a href="https://github.com/shikaan/OSle/releases">Releases</a> | <a href="https://github.com/shikaan/OSle/issues">Issues</a>  
+  </section>
 
   <main id="screen">
     <div class="rows"></div>
@@ -100,17 +107,19 @@
     <p>
       Builtins
       <ul>
-        <li><code>ls</code> list all available files and commands</li>
+        <li><code>ls</code> list all files and commands</li>
         <li><code>cl</code> clear the screen</li>
       </ul>
     </p>
     <p>
       Programs
       <ul>
-        <li><code>more</code> preview the content of a text file</li>
-        <li><code>snake</code> runs a snake game</li>
-        <li><code>ed &lt;file&gt;</code> text editor</li>
-        <li><code>rm &lt;file&gt;</code> removes a file</li>
+        <li><code>ed &lt;text-file&gt;</code> open a text editor</li>
+        <li><code>help</code> show this help</li>
+        <li><code>more &lt;text-file&gt;</code> preview the content of a file</li>
+        <li><code>mv &lt;source&gt; &lt;destination&gt;</code> change file's path from source to destination</li>
+        <li><code>rm &lt;text-file&gt;</code> delete a file</li>
+        <li><code>snake</code> launch a snake game</li>
       </ul>
     </p>
   </section>
