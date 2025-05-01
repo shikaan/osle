@@ -52,6 +52,13 @@ int 0x16
 ; the OS once we are done.
 int INT_RETURN
 
+; Once you are ready compile and bundle this program in your OSle image with
+;
+;   sdk/build tutorial/01-hello.s
+;   sdk/pack tutorial/01-hello.bin
+;
+; Check out the README to make sure you have all the required dependencies.
+
 ; Definitions
 ; -----------
 

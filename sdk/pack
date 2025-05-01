@@ -1,0 +1,68 @@
+#!/bin/sh
+NAME="$(basename "$0")"
+
+print_info() {
+  echo "$NAME is a CLI tool to add your OSle programs into an OSle image."
+  echo "If the image is not provided, it defaults to \"osle.img\"."
+  echo "Additional resources:"
+  echo "  - https://github.com/shikaan/osle to get started with OSle"
+  echo "  - osle-build to generate an OSle-compatible binary for a *.s source file"
+  echo ""
+  print_usage
+}
+
+print_usage() {
+  printf '%s\n    %s\n\n' "Usage:" "$NAME <path-to-binary> [osle-image-path]"
+  echo "Use \"$NAME --help\" for more information."
+  exit 1
+}
+
+if echo "$1" | grep -Eq '^(-h|--help)$'; then
+  print_info
+fi
+
+binary=$1
+osle=$2
+
+if [ -z "$osle" ]; then
+  osle="osle.img"
+fi
+
+if [ ! -f "$osle" ]; then
+  echo "$NAME: unable to find OSle image at ${osle}"
+  print_usage
+fi
+
+if [ -z "$binary" ]; then
+  echo "$NAME: missing required binary argument"
+  print_usage
+fi
+
+if [ ! -f "$binary" ]; then
+  echo "$NAME: unable to find binary at ${binary}"
+  print_usage
+fi
+
+BLOCK_SIZE=512
+FILE_BLOCKS=36
+TOTAL_BLOCKS=2880
+
+temp_file=$(mktemp)
+
+block=0
+while [ "$block" -lt "$TOTAL_BLOCKS" ]; do
+  # Extract the current chunk to check if it's empty
+  dd if="$osle" of="$temp_file" bs=$BLOCK_SIZE skip=$block count=$FILE_BLOCKS 2>/dev/null
+  
+  if [ "$(hexdump -v -e '/1 "%02X"' "$temp_file" | tr -d '0')" = "" ]; then
+    dd if="$binary" of="$osle" bs=$BLOCK_SIZE seek=$block conv=notrunc
+    rm "$temp_file"
+    exit 0
+  fi
+  
+  block=$((block + FILE_BLOCKS))
+done
+
+echo "$NAME: unable to find an empty block in $osle"
+rm "$temp_file"
+exit 1
