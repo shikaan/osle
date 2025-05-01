@@ -23,12 +23,12 @@ packs essential features like:
 - **Shell**: Run commands and builtins.
 - **File System**: Read, write, and find files on the system.
 - **Process Management**: Cooperatively spawn child processes.
-- **Userland Software**: Comes with [prebuilt software](./bin/) and an 
+- **Userland Software**: Comes with [pre-built software](./bin/) and an 
 [SDK](./sdk/) to write your own.
 
 [Check out the online demo](https://shikaan.github.io/OSle) to see it in action.
 
-## 📚 Creating your fist OSle program
+## 📚 Creating your first OSle program
 
 OSle includes a tiny [Software Development Kit (SDK)](./sdk/) that includes
 definitions and a toolchain to create your own OSle programs.
@@ -37,8 +37,7 @@ Follow the [step-by-step tutorial](./tutorial/) to write your first program!
 
 ## 🛠️ Development
 
-To develop OSle or guest programs that run on OSle, you will need the following
-tools:
+To develop OSle and OSle programs you will need the following tools:
 
 - [nasm](https://www.nasm.us)
 - [GNU make](https://www.gnu.org/software/make/) (usually preinstalled)
@@ -47,7 +46,7 @@ tools:
 <details>
 <summary>Installation instructions</summary>
 
-#### MacOS
+#### macOS
 
 Install dependencies using Homebrew:
 
@@ -68,7 +67,7 @@ apt install nasm bochs
 ### Build and Run OSle locally
 
 These recipes will compile OSle and use the [SDK](./sdk/) to compile and bundle
-all the prebuilt programs. Using `start` will also run bochs right away.
+all the pre-built programs. Using `start` will also run bochs right away.
 
 ```sh
 # build and run osle on bochs
@@ -103,14 +102,14 @@ qemu-system-i386 -fda osle.img
 Write the built image to a device using `dd`:
 
 > [!WARNING]  
-> The following action can damage your hardware. I take no responsibility for
+> The following action can damage your hardware. We take no responsibility for
 > any damage OSle might cause.
 
 ```sh
 # generate an OSle image at osle.img
 make osle
 
-# write it on a media
+# write it on a device
 sudo dd if=osle.img of=/dev/YOUR_DEVICE bs=512 count=1
 ```
 
