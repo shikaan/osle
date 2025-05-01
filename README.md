@@ -8,7 +8,7 @@ A tiny and mighty bootloader OS.
 
 
 <h4 align="center">
-  <a href="https://shikaan.github.io/OSle/">🚀 Try it out in the browser! 🚀</a>
+  <a href="https://shikaan.github.io/osle/">🚀 Try it out in the browser! 🚀</a>
 </h4>
 
 
@@ -115,7 +115,7 @@ sudo dd if=osle.img of=/dev/YOUR_DEVICE bs=512 count=1
 
 ## 🤝 Contributing
 
-Feel free to explore the [issues](https://github.com/shikaan/OSle/issues) and [pull requests](https://github.com/shikaan/OSle/pulls) to contribute or request features.
+Feel free to explore the [issues](https://github.com/shikaan/osle/issues) and [pull requests](https://github.com/shikaan/osle/pulls) to contribute or request features.
 
 ## License
 
