@@ -38,7 +38,12 @@ int 0x16
 
 ; Once we received the input, we are ready to return control to the OS.
 ;
-; Check out the README for informatio on how to run this code.
+; Once you are ready compile and bundle this program in your OSle image with
+;
+;   sdk/build tutorial/02-arguments.s
+;   sdk/pack tutorial/02-arguments.bin
+;
+; Check out the README to make sure you have all the required dependencies.
 int INT_RETURN
 
 ; Definitions

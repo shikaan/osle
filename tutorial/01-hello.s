@@ -51,7 +51,12 @@ int 0x16
 ; This interrupt triggers the INT_RETURN service, which returns the control to
 ; the OS once we are done.
 ;
-; Check out the README for informatio on how to run this code.
+; Once you are ready compile and bundle this program in your OSle image with
+;
+;   sdk/build tutorial/01-hello.s
+;   sdk/pack tutorial/01-hello.bin
+;
+; Check out the README to make sure you have all the required dependencies.
 int INT_RETURN
 
 ; Definitions
