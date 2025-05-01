@@ -6,9 +6,9 @@
 A tiny and mighty bootloader OS.
 </p>
 
-<p align="center">
+<div align="center">
   <video src="https://github.com/user-attachments/assets/a2cab8f8-fd60-4947-b886-4b1741072e22"></video>
-</p>
+</div>
 
 <h4 align="center">
   <a href="https://shikaan.github.io/osle/">🚀 Try it out in the browser! 🚀</a>
