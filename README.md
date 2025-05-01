@@ -29,7 +29,7 @@ packs essential features like:
 - **Userland Software**: Comes with [pre-built software](./bin/) and an 
 [SDK](./sdk/) to write your own.
 
-[Check out the online demo](https://shikaan.github.io/OSle) to see it in action.
+[Check out the online demo](https://shikaan.github.io/osle) to see it in action.
 
 ## 📚 Creating your first OSle program
 

@@ -68,7 +68,7 @@ call str_print
 ; Congratulations!
 ;
 ; If you have feedback on this course, or OSle in general, feel free to open an
-; issue https://github.com/shikaan/OSle/issues/new
+; issue https://github.com/shikaan/osle/issues/new
 exit:
   ; As in the previous exercise, we tell the user how to leave the program.
   mov si, RETURN
@@ -81,7 +81,7 @@ exit:
 
   ; We are finally ready to return control to the OS.
   int INT_RETURN
-  
+
   ; Once you are ready compile and bundle this program in your OSle image with
   ;
   ;   sdk/build tutorial/03-files.s
