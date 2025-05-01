@@ -114,7 +114,8 @@ PM_ARGS     equ 0xFFBF
 ; Each file on the disk has the following structure:
 ;
 ; File Entry (9216 bytes)
-;   path  u8[22]    - path of the file
+;   path  u8[21]    - path of the file
+;   flags u8        - flags A0000000  (A: executable)
 ;   size  u16       - file size in bytes
 ;   data  u8[9192]  - file content
 ;
@@ -128,14 +129,27 @@ FS_FILES        equ 40
 ; The path is a null-terminated string with max length of FS_PATH_SIZE.
 ;
 ; Usage:
-;   mov si, [FILE_BUFFER + FS_PATH_OFFSET] ; si includes the file path
+;   lea si, [FILE_BUFFER + FS_PATH_OFFSET] ; si points to the file path
 ;
 FS_PATH_OFFSET  equ 0
 
 ; FS_PATH_SIZE
 ; Maximum allowed length for a file path.
 ;
-FS_PATH_SIZE    equ 22
+FS_PATH_SIZE    equ 21
+
+; FS_SIZE_OFFSET
+; Offset from which to start reading the flags byte in the file buffer.
+;
+; Usage:
+;   mov cl, byte [FILE_BUFFER + FS_FLAGS_OFFSET] ; cl is the flags
+;
+FS_FLAGS_OFFSET equ FS_PATH_SIZE
+
+; FS_FLAGS_SIZE
+; Size of the flgas field.
+;
+FS_FLAGS_SIZE   equ 1
 
 ; FS_SIZE_OFFSET
 ; Offset from which to start reading the file size in the file buffer.
@@ -144,7 +158,7 @@ FS_PATH_SIZE    equ 22
 ; Usage:
 ;   mov cx, word [FILE_BUFFER + FS_SIZE_OFFSET] ; cx is the file size
 ;
-FS_SIZE_OFFSET  equ FS_PATH_SIZE
+FS_SIZE_OFFSET  equ FS_PATH_SIZE + FS_FLAGS_SIZE
 
 ; FS_SIZE_SIZE
 ; Length of the word that includes the file size.
@@ -154,7 +168,8 @@ FS_SIZE_SIZE    equ 2
 ; FS_HEADER_SIZE
 ; Total size of the file header in the file buffer.
 ; The file data starts just after the header
-FS_HEADER_SIZE  equ FS_PATH_SIZE + FS_SIZE_SIZE
+;
+FS_HEADER_SIZE  equ FS_PATH_SIZE + FS_FLAGS_SIZE + FS_SIZE_SIZE
 
 ; FS_DATA_OFFSET
 ; Offset from which to start reading the file data in the file buffer.

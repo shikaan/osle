@@ -159,17 +159,6 @@ str_print:
 .done:
   ret
 
-; str_copy(si: u8* string, di: u8* string, cx: count) -> void
-; Copies up to cx bytes from source into destination.
-str_copy:
-  lodsb
-  stosb
-  test al, al
-  je .done
-  loop str_copy
-.done:
-  ret
-
 ; Screen
 ; ------
 
@@ -232,7 +221,7 @@ int_fs_find:
   jmp int_failure
 .found:
   popa
-  mov al, dl                  ; move file index in the return register
+  mov al, dl                        ; move file index in the return register
   jmp int_success
 
 ; int_fs_create(di: u8* path, bx: u8* destination) -> (al: file_index)
@@ -261,7 +250,13 @@ int_fs_create:
     mov si, di
     mov di, bx
     mov cx, FS_PATH_SIZE
-    call str_copy             ; write path in the new file
+.copy_path:
+    lodsb
+    stosb
+    test al, al
+    je .done_copying
+    loop .copy_path
+.done_copying:
     call fs_write
   pop ax
   jc int_failure
@@ -334,10 +329,12 @@ pm_switch_to_guest_segment:
 ; pm_exec(di: u8* filename, si: u8* args)
 ; Loads a binary in the PM_SEGMENT and runs it. Sets carry flag upon failure.
 pm_exec:
+  mov bx, FS_FILE_MEMORY
   pusha
-    mov bx, FS_FILE_MEMORY
     int INT_FS_FIND
     jc .done
+    cmp byte [bx + FS_FLAGS_OFFSET], 0x80         ; bail if not executable
+    jb .done  
   popa
 
   call pm_switch_to_guest_segment
@@ -357,11 +354,9 @@ pm_exec:
   repe movsb                                      ; copy args in args section
 
 .copy_executable:
-  lea si, [FS_FILE_MEMORY + FS_DATA_OFFSET]       ; put file data in source
-
+  lea si, [bx + FS_DATA_OFFSET]                   ; put file data in source
   xor di, di                                      ; select PM_SEGMENT as dest
-
-  mov cx, word [FS_FILE_MEMORY + FS_SIZE_OFFSET]  ; only copy `size` bytes
+  mov cx, word [bx + FS_SIZE_OFFSET]              ; only copy `size` bytes
   repe movsb
 
   call pm_switch_to_guest_segment

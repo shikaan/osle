@@ -43,7 +43,7 @@ str_print:
   ret
 
 VERSION:  db 0x0a, 0x0d
-          db "OSle: A tiny but mighty OS - https://github.com/shikaan/OSle"
+          db "OSle - https://github.com/shikaan/OSle"
           db 0x0a, 0x0d, 0
 
 BUILTINS: db 0x0a, 0x0d, "Builtins:", 0x0a, 0x0d
