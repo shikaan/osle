@@ -475,7 +475,7 @@ save_file:
   mov bx, FILE_BUFFER                         ; write file on disk
   mov dl, byte [open_file_handle]
   int INT_FS_WRITE
-  jnc .done
+  jc .done
   mov byte [modified], 0                      ; unset modified flag on success
 .done:
   ret
