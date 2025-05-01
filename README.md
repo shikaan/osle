@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-A mighty bootloader OS with a shell, file system, and process management.
+A tiny and mighty bootloader OS.
 </p>
 
 
@@ -12,7 +12,7 @@ A mighty bootloader OS with a shell, file system, and process management.
 </h4>
 
 
-## 🤓 Overview
+## 👀 Overview
 
 OSle is a [real-mode](https://wiki.osdev.org/Real_Mode) OS that fits in a 
 bootloader. 
