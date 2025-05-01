@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-A tiny and mighty bootloader OS.
+A tiny and mighty boot sector OS.
 </p>
 
 <div align="center">
@@ -17,8 +17,8 @@ A tiny and mighty bootloader OS.
 
 ## 👀 Overview
 
-OSle is a [real-mode](https://wiki.osdev.org/Real_Mode) OS that fits in a 
-bootloader. 
+OSle is a [real-mode](https://wiki.osdev.org/Real_Mode) OS that fits in a boot 
+sector. 
 
 It's written in x86 assembly and, despite its tiny size (only 510 bytes), it 
 packs essential features like:
@@ -29,7 +29,7 @@ packs essential features like:
 - **Userland Software**: Comes with [pre-built software](./bin/) and an 
 [SDK](./sdk/) to write your own.
 
-[Check out the online demo](https://shikaan.github.io/osle) to see it in action.
+[Check out the online demo](https://shikaan.github.io/osle) to see it in action!
 
 ## 📚 Creating your first OSle program
 
@@ -118,7 +118,9 @@ sudo dd if=osle.img of=/dev/YOUR_DEVICE bs=512 count=1
 
 ## 🤝 Contributing
 
-Feel free to explore the [issues](https://github.com/shikaan/osle/issues) and [pull requests](https://github.com/shikaan/osle/pulls) to contribute or request features.
+Feel free to explore the [issues](https://github.com/shikaan/osle/issues) and 
+[pull requests](https://github.com/shikaan/osle/pulls) to contribute or request
+features.
 
 ## License
 
