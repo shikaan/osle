@@ -28,8 +28,9 @@ osle: osle.o bin/snake.bin bin/ed.bin bin/more.bin bin/rm.bin bin/mv.bin bin/hel
 
 %.bin: %.s
 	$(AS) $(ASFLAGS) -o $*.o $<
-	@filename=$(shell basename $@ .bin | cut -c -22) && \
-	(	printf "$$filename" | dd bs=22 conv=sync of=header.bin 2>/dev/null && \
+	@filename=$(shell basename $@ .bin | cut -c -21) && \
+	(	printf "$$filename" | dd bs=21 conv=sync of=header.bin 2>/dev/null && \
+		printf "\x80" >> header.bin && \
 		filesize=$$(stat -c %s "$*.o" 2>/dev/null || stat -f %z "$*.o") && \
 		perl -e 'print pack("v", '$$filesize');' >> header.bin )
 	cat header.bin $*.o > $@
