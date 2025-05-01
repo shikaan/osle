@@ -6,9 +6,6 @@
 A mighty bootloader OS with a shell, file system, and process management.
 </p>
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/17ff6689-5bc9-4cb9-9ad3-ac0ad04b8d9a" width=360></video>
-</p>
 
 <h4 align="center">
   <a href="https://shikaan.github.io/OSle/">🚀 Try it out in the browser! 🚀</a>
