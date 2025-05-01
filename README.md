@@ -6,9 +6,12 @@
 A tiny and mighty bootloader OS.
 </p>
 
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/4dda88d2-e036-4e05-a864-1d5dc69f6fb0"></video>
+</p>
 
 <h4 align="center">
-  <a href="https://shikaan.github.io/OSle/">🚀 Try it out in the browser! 🚀</a>
+  <a href="https://shikaan.github.io/osle/">🚀 Try it out in the browser! 🚀</a>
 </h4>
 
 
@@ -26,7 +29,7 @@ packs essential features like:
 - **Userland Software**: Comes with [pre-built software](./bin/) and an 
 [SDK](./sdk/) to write your own.
 
-[Check out the online demo](https://shikaan.github.io/OSle) to see it in action.
+[Check out the online demo](https://shikaan.github.io/osle) to see it in action.
 
 ## 📚 Creating your first OSle program
 
@@ -115,7 +118,7 @@ sudo dd if=osle.img of=/dev/YOUR_DEVICE bs=512 count=1
 
 ## 🤝 Contributing
 
-Feel free to explore the [issues](https://github.com/shikaan/OSle/issues) and [pull requests](https://github.com/shikaan/OSle/pulls) to contribute or request features.
+Feel free to explore the [issues](https://github.com/shikaan/osle/issues) and [pull requests](https://github.com/shikaan/osle/pulls) to contribute or request features.
 
 ## License
 

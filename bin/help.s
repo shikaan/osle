@@ -43,7 +43,7 @@ str_print:
   ret
 
 VERSION:  db 0x0a, 0x0d
-          db "OSle - https://github.com/shikaan/OSle"
+          db "OSle - https://github.com/shikaan/osle"
           db 0x0a, 0x0d, 0
 
 BUILTINS: db 0x0a, 0x0d, "Builtins:", 0x0a, 0x0d
@@ -60,7 +60,7 @@ PROGRAMS: db "Programs:", 0x0a, 0x0d
           db "  - snake: launch a snake game", 0x0a, 0x0d, 0x0a, 0x0d, 0
 
 INFO:     db "For any feedack please refer to "
-          db "https://github.com/shikaan/OSle/issues", 0x0a, 0x0d, 0
+          db "https://github.com/shikaan/osle/issues", 0x0a, 0x0d, 0
 
 RETURN:   db 0x0a, 0x0d, "Press any key to return", 0
 

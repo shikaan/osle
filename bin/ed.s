@@ -7,13 +7,30 @@ mov ax, 0x0003
 int 0x10
 
 mov di, PM_ARGS         ; try reading the file passed as argument, if any
+
+cmp byte [di], 0        ; if no file is passed, make a new one
+je default_file
+
 call open_file
 jnc initial_render
 
-mov si, NEW_FILE        ; write the default file name in the current file buffer
-mov cx, NEW_FILE_LEN
-mov di, FILE_BUFFER
-repe movsb
+new_file:
+  mov si, PM_ARGS        ; creates a file with name provided as arg
+  mov cx, FS_PATH_SIZE
+  mov di, FILE_BUFFER
+.copy_char:
+  lodsb
+  test al, al
+  je initial_render
+  stosb
+  loop .copy_char
+  jmp initial_render
+
+default_file:
+  mov si, NEW_FILE        ; write the default file name in the current buffer
+  mov cx, NEW_FILE_LEN
+  mov di, FILE_BUFFER
+  repe movsb
 
 initial_render:
   call render
@@ -434,20 +451,22 @@ save_file:
   jne .save                                   ;   is open - create a file then
 
 .create_file_and_update_content:
-  lea si, [FILE_BUFFER + FS_DATA_OFFSET]      ; copy current buffer in a temp
+  mov si, FILE_BUFFER                         ; copy current buffer in a temp
   mov di, TMP_BUFFER                          ;   area to safely open a new file
   mov cx, word [file_data_len]
+  add cx, FS_HEADER_SIZE
   repe movsb
 
-  mov di, NEW_FILE                            ; create a new file and load it in
+  lea di, [TMP_BUFFER + FS_PATH_OFFSET]       ; create a new file and load it in
   mov bx, FILE_BUFFER                         ;   the file buffer location
   int INT_FS_CREATE
   jc .done
 
   mov byte [open_file_handle], al             ; copy data from the temp buffer
   mov si, TMP_BUFFER                          ;   into the file buffer location
-  lea di, [FILE_BUFFER + FS_DATA_OFFSET]
+  mov di, FILE_BUFFER
   mov cx, word [file_data_len]
+  add cx, FS_HEADER_SIZE
   repe movsb
 .save:
   mov ax, word [file_data_len]                ; update file size
@@ -456,7 +475,7 @@ save_file:
   mov bx, FILE_BUFFER                         ; write file on disk
   mov dl, byte [open_file_handle]
   int INT_FS_WRITE
-  jnc .done
+  jc .done
   mov byte [modified], 0                      ; unset modified flag on success
 .done:
   ret
@@ -606,7 +625,7 @@ MAX_COLS              equ 80
 MAX_LEN               equ MAX_COLS * MAX_ROWS
 FILE_HEADER_SIZE      equ 24
 FILE_BUFFER           equ 0x9000
-TMP_BUFFER            equ 0x7000
+TMP_BUFFER            equ 0x6000
 CURSOR_INIT           equ 0x0100
 CRLF                  equ 0x0D0A
 HEADER_POSITION       equ 0x0002  ; first line, third column
