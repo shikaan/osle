@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>OSle - A tiny and mighty bootloader OS</title>
+  <title>OSle - A tiny and mighty boot sector OS</title>
   <meta charset="UTF-8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💾</text></svg>">
   <script src="https://unpkg.com/v86@0.5.43/build/libv86.js"></script>
@@ -31,7 +31,7 @@
     h2 {
       color: var(--primary-light);
       text-shadow: var(--primary-dark) -1px 1px;
-      padding-top: calc(var(--vspace-2));
+      padding-top: var(--vspace-1);
       padding-bottom: var(--vspace-1);
       text-transform: uppercase;
       font-weight: bold;
@@ -79,6 +79,25 @@
       padding-top: var(--vspace-1);
     }
 
+    pre {
+      background-color: var(--black);
+      color: var(--white);
+      padding: var(--vspace-1);
+      margin-top: var(--vspace-1);
+    }
+
+    footer {
+      margin-top: var(--vspace-2);
+      padding: var(--vspace-2);
+      background-color: var(--black);
+      color: var(--white);
+      text-align: center;
+    }
+
+    a:visited {
+      color: inherit;
+    }
+
     .links {
       text-align: center;
     }
@@ -91,10 +110,10 @@
       <img src="logo.svg" alt="OSle logo">
       <h1 hidden>OSle</h1>
     </div>
-    <small>A tiny and mighty bootloader OS</small>
+    <small>A tiny and mighty boot sector OS</small>
   </header>
   <section class="links">
-    <a href="https://github.com/shikaan/osle">Code</a> | <a href="https://github.com/shikaan/osle/releases">Releases</a> | <a href="https://github.com/shikaan/osle/issues">Issues</a>  
+    <a href="https://github.com/shikaan/osle">GitHub</a> | <a href="https://github.com/shikaan/osle/releases">Releases</a> | <a href="https://github.com/shikaan/osle/issues">Issues</a>  
   </section>
 
   <main id="screen">
@@ -124,6 +143,62 @@
     </p>
   </section>
 
+  <section>
+    <h2>What is this?</h2>
+    <p>OSle is a real-mode OS that fits in a 
+      <a href="https://en.wikipedia.org/wiki/Boot_sector">boot sector</a>.
+    </p>
+    <p>
+      It's written in x86 assembly and, despite its tiny size (only 510 bytes),
+      it packs essential features like:
+    </p>
+
+    <ul>
+      <li><b>shell</b> run commands and builtins</li>
+      <li><b>file system</b> read, write, and find files on the disk</li>
+      <li><b>process management</b> cooperatively spawn processes</li>
+      <li>
+        <b>userland software</b> comes with pre-built software and an SDK to 
+        write your own
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Your first program</h2>
+    <p>
+      OSle includes a tiny
+      <a href="https://github.com/shikaan/osle/tree/main/sdk">Software Development Kit</a>
+      that includes definitions and a toolchain to create your own OSle programs.
+    </p>
+
+    <p>
+      Follow the 
+      <a href="https://github.com/shikaan/osle/tree/main/tutorial">step-by-step tutorial</a> 
+      to get started and, whenever you are ready to run your code, just compile 
+      it and bundle it like this:
+    </p>
+
+    <pre>
+# compile your source code into a binary
+$ sdk/build my_program.s
+
+# bundle it with OSle
+$ sdk/pack my_program.bin</pre>
+  </section>
+
+  <section>
+    <h2>Feedback and contributions</h2>
+
+    <p>For feedback and contrubtions guidelines, please refer to the 
+      <a href="https://github.com/shikaan/osle">GitHub Repository</a>.
+    </p>
+  </section>
+
+  <footer>
+    <p>made with ❤️ by <a href="https://github.com/shikaan">shikaan</a></p>
+  </footer>
+   
   <script>
     new V86({
       wasm_path: "https://unpkg.com/v86@0.5.43/build/v86.wasm",
