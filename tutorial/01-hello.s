@@ -50,6 +50,8 @@ int 0x16
 ; more details.
 ; This interrupt triggers the INT_RETURN service, which returns the control to
 ; the OS once we are done.
+;
+; Check out the README for informatio on how to run this code.
 int INT_RETURN
 
 ; Definitions

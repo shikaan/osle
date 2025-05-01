@@ -80,6 +80,8 @@ exit:
   int 0x16
 
   ; Once we received the input, we are ready to return control to the OS.
+  ;
+  ; Check out the README for informatio on how to run this code.
   int INT_RETURN
 
 ; Definitions
