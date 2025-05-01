@@ -1,0 +1,53 @@
+#!/bin/sh
+NAME="$(basename "$0")"
+
+print_info() {
+  echo "$NAME is a CLI tool to compile your OSle programs."
+  echo "Feed it an *.s file to compile it into a binary you can run with OSle disk."
+  echo "Additional resources:"
+  echo "  - https://github.com/shikaan/osle to get started with OSle"
+  echo "  - osle-pack to add your program to an OSle image"
+  echo ""
+  print_usage
+}
+
+print_usage() {
+  printf '%s\n    %s\n\n' "Usage:" "$NAME <your_source.s path>"
+  echo "Use \"$NAME --help\" for more information."
+  exit 1
+}
+
+if echo "$1" | grep -Eq '^(-h|--help)$'; then
+  print_info
+fi
+
+filename=$1
+# Check if the file exists
+if [ -z "$filename" ] || [ ! -f "$filename" ]; then
+  echo "$NAME: unable to open ${filename}"
+  print_usage
+fi
+
+base="$(basename "$filename" .s)"
+obj="${base}.o"
+
+# Build the raw binary
+nasm -f bin -o "${obj}" "${filename}"
+
+# Package it as an OSle file
+
+# Ensure file name size is less than 21
+filename=$(echo "${filename}" | cut -c -21)
+
+# Put file name in the header of the file
+printf '%s' "${base}" | dd bs=21 conv=sync of=header.bin 2>/dev/null
+# Set the executable flag
+printf "\x80" >> header.bin
+# Add the size to the header
+filesize=$(stat -c %s "${obj}" 2>/dev/null || stat -f %z "${obj}")
+perl -e 'print pack("v", '"${filesize}"');' >> header.bin
+# Finally, add data to the file
+cat header.bin "${base}.o" > "$(dirname "$filename")/${base}.bin"
+
+# Remove intermediate artifacts
+rm -f header.bin "${base}.o"
