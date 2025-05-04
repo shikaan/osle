@@ -39,7 +39,7 @@ main:
 ; -----
 
 ; shell(void)
-; Launches an interactive command prompt, the entry point of our real-mode OS.
+; Launches an interactive command prompt, the entry point of OSle.
 shell:
 .print_prompt:
   mov al, '>'
@@ -58,7 +58,7 @@ shell:
   cmp byte [input_len], INPUT_CAP
   jae .wait_for_key               ; nop if the input buffer is full
 
-  movzx bx, byte [input_len]      ; load input length into bx
+  movzx bx, byte [input_len]
   mov di, INPUT_PTR
   mov [di + bx], al               ; append char at the end of the buffer
   inc byte [input_len]            ; increase size
@@ -90,7 +90,7 @@ shell:
 
   mov si, CLEAR
   call .cmp_cmd
-  je .cmd_clear                   ; command is the builtin clear
+  je .cmd_cl                      ; command is the builtin cl
 
   mov si, LS
   call .cmp_cmd
@@ -105,8 +105,8 @@ shell:
   repe cmpsb
   ret
 
-.cmd_clear:
-  jmp boot
+.cmd_cl:
+  jmp boot			  ; restart the os to clear
 
 .cmd_ls:
   call fs_list
@@ -117,12 +117,12 @@ shell:
   mov cx, FS_PATH_SIZE
   mov di, INPUT_PTR
   repne scasb
-  mov byte [di - 1], 0
+  mov byte [di - 1], 0		  ; nul-split (replace space) args and command
 
   mov si, di
   mov di, INPUT_PTR
   call pm_exec
-  jc .cmd_error                     ; only returns in case of errors
+  jc .cmd_error                   ; only returns in case of errors
 
 .cmd_error:
   mov si, ERROR
@@ -134,7 +134,7 @@ shell:
   mov byte [input_len], 0
   jmp .print_prompt
 
-; sh_cr(void)
+; sh_cr(void) -> void
 ; Moves the cursor at the beginning of the next line.
 sh_cr:
   mov al, 0x0d
@@ -163,7 +163,7 @@ str_print:
 ; ------
 
 ; scr_tty(al: u8 char) -> void
-; Like put_char, but advances the cursor as well.
+; Prints a char and advances the cursor.
 scr_tty:
   mov ah, 0x0E  ; 0E: teletype
   xor bh, bh    ; page = 0
@@ -224,9 +224,9 @@ int_fs_find:
   mov al, dl                        ; move file index in the return register
   jmp int_success
 
-; int_fs_create(di: u8* path, bx: u8* destination) -> (al: file_index)
-; Creates a new file and allocate memory for it in bx. Returns the file index
-; in the range (0-40)
+; int_fs_create(di: u8* path, bx: u8* destination) -> (al: file_handle)
+; Creates a new file and allocate memory for it in bx. Returns a file handle,
+; an index in the range (0-40)
 int_fs_create:
   cmp byte [di], 0
   je int_failure           ; bail if path is empty
@@ -247,7 +247,7 @@ int_fs_create:
 .found:
   popa
   push dx
-    mov si, di
+    mov si, di		    ; copy file name in the empty block
     mov di, bx
     mov cx, FS_PATH_SIZE
 .copy_path:
@@ -263,14 +263,14 @@ int_fs_create:
 
   jmp int_success
 
-; int_fs_write(bx: u8* file_buffer, dl: file_index)
-; Writes the input buffer to the file whose index is dl.
+; int_fs_write(bx: u8* file_buffer, dl: file_handle) -> void
+; Writes the input buffer to the file whose handle is dl.
 int_fs_write:
   call fs_write      ; save buffer on disk
   jc int_failure
   jmp int_success
 
-; fs_disk(ah: u8 operation, bx: u8* destination, dl: u8 file_index)
+; fs_disk(ah: u8 operation, bx: u8* destination, dl: u8 file_handle) -> void
 ; Performs a disk operation whose source/destination is bx on track dh.
 ;   ah = 0x02 is read
 ;   ah = 0x03 is write
@@ -290,11 +290,11 @@ fs_disk:
   int 0x13
   ret
 
-; fs_list()
+; fs_list(void) -> void
 ; Prints on screen a list of files in the current directory
 fs_list:
   mov cx, FS_FILES
-  mov dl, 1
+  mov dl, 1			  ; start at index 1, since 0 is the OS
 .loop:
   pusha
     mov bx, FS_FILE_MEMORY

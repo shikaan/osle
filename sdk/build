@@ -40,12 +40,18 @@ nasm -f bin -o "${obj}" "${filename}"
 filename=$(echo "${filename}" | cut -c -21)
 
 # Put file name in the header of the file
-printf '%s' "${base}" | dd bs=21 conv=sync of=header.bin 2>/dev/null
+printf '%s' "${base}" | dd bs=21 conv=sync of=header.bin conv=notrunc 2>/dev/null
+
 # Set the executable flag
-printf "\x80" >> header.bin
+printf "\200" | dd of=header.bin count=1 bs=1 seek=21 conv=notrunc 2>/dev/null
+
 # Add the size to the header
 filesize=$(stat -c %s "${obj}" 2>/dev/null || stat -f %z "${obj}")
-perl -e 'print pack("v", '"${filesize}"');' >> header.bin
+low_byte=$(($filesize & 0xFF))
+high_byte=$((($filesize >> 8) & 0xFF))
+printf "\\$(printf '%03o' $low_byte)\\$(printf '%03o' $high_byte)"\
+  | dd of=header.bin count=20 bs=1 seek=22 conv=notrunc 2>/dev/null
+
 # Finally, add data to the file
 cat header.bin "${base}.o" > "$(dirname "$filename")/${base}.bin"
 
