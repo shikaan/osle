@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "osle_prisystem.h": "c",
+        "sstream": "c"
+    }
+}
