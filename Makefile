@@ -5,6 +5,9 @@ ASFLAGS:=-f bin
 %.bin: %.s
 	sdk/build $<
 
+%.bin: %.c
+	sdk/build_c $<
+
 .PHONY: osle_test
 osle_test: osle fixtures/text.txt.bin test/fs.test.bin
 	sdk/pack test/fs.test.bin

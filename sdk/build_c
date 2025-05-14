@@ -1,0 +1,59 @@
+#!/bin/sh
+NAME="$(basename "$0")"
+
+print_info() {
+  echo "$NAME is a CLI tool to compile your OSle programs."
+  echo "Feed it an *.c file to compile it into a binary you can run with OSle disk."
+  echo "Additional resources:"
+  echo "  - https://github.com/shikaan/osle to get started with OSle"
+  echo "  - osle-pack to add your program to an OSle image"
+  echo ""
+  print_usage
+}
+
+print_usage() {
+  printf '%s\n    %s\n\n' "Usage:" "$NAME <your_source.c path>"
+  echo "Use \"$NAME --help\" for more information."
+  exit 1
+}
+
+if echo "$1" | grep -Eq '^(-h|--help)$'; then
+  print_info
+fi
+
+filename=$1
+# Check if the file exists
+if [ -z "$filename" ] || [ ! -f "$filename" ]; then
+  echo "$NAME: unable to open ${filename}"
+  print_usage
+fi
+
+base="$(basename "$filename" .c)"
+obj="${base}.o"
+
+# Build the raw binary
+gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -m32 -c "${filename}" -o "${obj}"
+
+# Package it as an OSle file
+
+# Ensure file name size is less than 21
+filename=$(echo "${filename}" | cut -c -21)
+
+# Put file name in the header of the file
+printf '%s' "${base}" | dd bs=21 conv=sync of=header.bin conv=notrunc 2>/dev/null
+
+# Set the executable flag
+printf "\200" | dd of=header.bin count=1 bs=1 seek=21 conv=notrunc 2>/dev/null
+
+# Add the size to the header
+filesize=$(stat -c %s "${obj}" 2>/dev/null || stat -f %z "${obj}")
+low_byte=$(($filesize & 0xFF))
+high_byte=$((($filesize >> 8) & 0xFF))
+printf "\\$(printf '%03o' $low_byte)\\$(printf '%03o' $high_byte)"\
+  | dd of=header.bin count=20 bs=1 seek=22 conv=notrunc 2>/dev/null
+
+# Finally, add data to the file
+cat header.bin "${base}.o" > "$(dirname "$filename")/${base}.bin"
+
+# Remove intermediate artifacts
+rm -f header.bin "${base}.o"
