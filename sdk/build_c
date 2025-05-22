@@ -32,7 +32,7 @@ base="$(basename "$filename" .c)"
 obj="${base}.o"
 
 # Build the raw binary
-gcc -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -m32 -c "${filename}" -o "${obj}"
+gcc -ffreestanding -nostdlib -nodefaultlibs -Isdk -c "${filename}" -o "${obj}"
 
 # Package it as an OSle file
 
@@ -43,7 +43,7 @@ filename=$(echo "${filename}" | cut -c -21)
 printf '%s' "${base}" | dd bs=21 conv=sync of=header.bin conv=notrunc 2>/dev/null
 
 # Set the executable flag
-printf "\200" | dd of=header.bin count=1 bs=1 seek=21 conv=notrunc 2>/dev/null
+# printf "\200" | dd of=header.bin count=1 bs=1 seek=21 conv=notrunc 2>/dev/null
 
 # Add the size to the header
 filesize=$(stat -c %s "${obj}" 2>/dev/null || stat -f %z "${obj}")

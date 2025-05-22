@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "osle_prisystem.h": "c",
-        "sstream": "c"
+        "sstream": "c",
+        "cstdint": "cpp"
     }
 }
