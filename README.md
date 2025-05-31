@@ -115,6 +115,38 @@ make osle
 # write it on a device
 sudo dd if=osle.img of=/dev/YOUR_DEVICE bs=512 count=1
 ```
+## 🛠️ `gcc` Installation Tamil to Compile C Language
+
+If you are going to write C programs for Osle, you will need a Cross-Compiler that can compile C.
+
+We recommend using [`i686-elf-gcc`](https://wiki.osdev.org/GCC_Cross-Compiler) as your cross-compiler. On Intel/AMD (x86) systems the default `gcc` will work, but on ARM systems you **must** use a cross-compiler.
+
+### Apple Silicon (macOS)
+
+Install the cross-compiler using Homebrew:
+
+```sh
+brew tap nativeosdev/formulae
+brew install i686-elf-gcc
+```
+
+### ARM Linux (Debian, Raspberry Pi, etc.)
+
+Install the cross-compiler using your package manager or build it manually. For Debian-based systems:
+
+```sh
+sudo apt install gcc-i686-linux-gnu
+```
+
+Or, follow the [OSDev wiki instructions](https://wiki.osdev.org/GCC_Cross-Compiler) to build `i686-elf-gcc` from source.
+
+### Adapting the Build Scripts
+
+The build scripts can be adapted to use the correct compiler depending on your platform. For example, you can set an environment variable or modify the script to use `i686-elf-gcc` if available, falling back to `gcc` otherwise.
+
+If you need help with this setup, feel free to reach out or open an issue — I'm happy to assist!
+
+---
 
 ## 🤝 Contributing
 

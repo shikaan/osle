@@ -1,19 +1,20 @@
 #include "osle_lib.h"
 
 void print(const char* str) {
-    // Print a string to the screen.
-    // The string must be null-terminated.
-    // The function will stop printing when it reaches the null terminator.
-    // The string is stored in the data segment, so it must be in the format
-    // "string" or 'string'.
-    // The function will not check for buffer overflows, so make sure the string
-    // is not too long.
-    asm volatile (
-        "mov di, %0\n"
-        "int %1\n"
-        :
-        : "r"(str), "i"(INT_RETURN)
-    );
+    // Print a string to the screen using BIOS interrupt 0x10
+    // AH = 0x0E (teletype output)
+    // AL = character to print
+    while (*str) {
+        asm volatile (
+            "mov ah, 0x0E\n"
+            "mov al, %0\n"
+            "int 0x10\n"
+            :
+            : "r"(*str)
+            : "ax"
+        );
+        str++;
+    }
 }
 
 void println(const char* str) {
