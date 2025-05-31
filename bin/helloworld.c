@@ -1,5 +1,5 @@
-#include "sdk/osle_lib.h"
-#include "sdk/number.h"
+#include "osle_lib.h"
+#include "number.h"
 
 void main() {
     // Print a string to the screen.
