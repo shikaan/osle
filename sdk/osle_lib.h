@@ -82,12 +82,6 @@ void print_hex(u32 num);
 u32 string_lenght(const char* str);
 void string_copy(char* dest, const char* src);
 
-void return_to_osle(void) {
-    asm volatile (
-        "int %0\n"
-        : 
-        : "i"(INT_RETURN)
-    );
-}
+void return_to_osle(void);
 
 #endif // OSLE_SDK_H

@@ -6,16 +6,33 @@ void print(const char* str) {
     // AL = character to print
     while (*str) {
         asm volatile (
-            "mov ah, 0x0E\n"
-            "mov al, %0\n"
-            "int 0x10\n"
+            ".code16\n"           // 16-bit kod olduğunu belirt
+            "movb $0x0E, %%ah\n"  // b suffix ile 8-bit olduğunu belirt
+            "movb %0, %%al\n"     // b suffix ile 8-bit olduğunu belirt
+            "int $0x10\n"
             :
-            : "r"(*str)
+            : "q"(*str)           // "r" yerine "q" kullan (8-bit register)
             : "ax"
         );
         str++;
     }
 }
+
+// ...existing code...
+
+void print_hex(u32 num) {
+    // Print a number in hexadecimal format
+    asm volatile (
+        ".code16\n"              // 16-bit kod olduğunu belirt
+        "movl %0, %%eax\n"       // l suffix ile 32-bit olduğunu belirt
+        "int %1\n"
+        :
+        : "r"(num), "i"(INT_RETURN)
+        : "eax"
+    );
+}
+
+// ...existing code...
 
 void println(const char* str) {
     // Print a string to the screen and add a new line at the end.
@@ -25,20 +42,6 @@ void println(const char* str) {
     // "string" or 'string'.
     print(str);
     print("\n");
-}
-
-void print_hex(u32 num) {
-    // Print a number in hexadecimal format.
-    // The number is stored in the data segment, so it must be in the format
-    // "0x00000000".
-    // The function will not check for buffer overflows, so make sure the number
-    // is not too long.
-    asm volatile (
-        "mov eax, %0\n"
-        "int %1\n"
-        :
-        : "r"(num), "i"(INT_RETURN)
-    );
 }
 
 u32 string_lenght(const char* str) {
@@ -61,4 +64,12 @@ void string_copy(char* dest, const char* src) {
     // The string is stored in the data segment, so it must be in the format
     // "string" or 'string'.
     while ((*dest++ = *src++) != '\0');
+}
+
+void return_to_osle(void) {
+    asm volatile (
+        "int %0\n"
+        : 
+        : "i"(INT_RETURN)
+    );
 }

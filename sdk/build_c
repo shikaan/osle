@@ -32,7 +32,7 @@ base="$(basename "$filename" .c)"
 obj="${base}.o"
 
 # Build the raw binary
-gcc -ffreestanding -nostdlib -nodefaultlibs -Isdk -c "${filename}" -o "${obj}"
+gcc -m16 -march=i386 -mregparm=3 -ffreestanding -nostdlib -nodefaultlibs -Isdk -c "${filename}" -o "${obj}"
 
 # Package it as an OSle file
 

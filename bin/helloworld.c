@@ -1,7 +1,7 @@
 #include "osle_lib.h"
 #include "number.h"
 
-void main() {
+void main(void) {
     // Print a string to the screen.
     // The string must be null-terminated.
     // The function will stop printing when it reaches the null terminator.

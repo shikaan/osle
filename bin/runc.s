@@ -1,10 +1,12 @@
 bits 16
 %include "sdk/osle.inc"
 
+; Ekranı temizle
 mov ah, 0x00
 mov al, 0x03
 int 0x10
 
+; Dosyayı bul ve yükle
 mov di, PM_ARGS
 mov bx, FILE_BUFFER
 int INT_FS_FIND
@@ -19,13 +21,25 @@ not_found:
     jmp wait_exit
 
 run_loaded:
+    ; Stack frame'i hazırla
+    mov bp, sp
+    sub sp, 2              ; Local değişkenler için yer ayır
+    
+    ; Data segmentini ayarla
+    mov ax, ds
+    mov es, ax
+    
     ; Stack'i ayarla
     mov sp, 0xFFFE
-
-    ; Kodun başına atla (main fonksiyonu)
+    
+    ; Main'i çağır
     mov ax, FILE_BUFFER
     add ax, FS_DATA_OFFSET
-    jmp ax
+    call ax               ; jmp yerine call kullan
+    
+    ; Main'den döndükten sonra
+    add sp, 2            ; Stack'i temizle
+    jmp wait_exit        ; Program bitişine git
 
 wait_exit:
     mov si, RETURN
