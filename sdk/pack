@@ -1,46 +1,80 @@
 #!/bin/sh
-NAME="$(basename "$0")"
+NAME="pack"
+NAME_LONG="pack (OSle Packer)"
+VERSION="v0.1.0"
 
 print_info() {
-  echo "$NAME is a CLI tool to add your OSle programs into an OSle image."
-  echo "If the image is not provided, it defaults to \"osle.img\"."
-  echo "Additional resources:"
-  echo "  - https://github.com/shikaan/osle to get started with OSle"
-  echo "  - osle-build to generate an OSle-compatible binary for a *.s source file"
-  echo ""
-  print_usage
+  cat << EOF
+Usage: $NAME BINARY [IMAGE]
+Add OSle programs into an OSle image.
+
+Pack BINARY into IMAGE. If IMAGE is not provided, it defaults to "osle.img".
+
+  -h, --help         display this help and exit
+  -v, --version      output version information and exit
+
+Examples:
+  $NAME program.bin              Pack program.bin into osle.img
+  $NAME program.bin myos.img     Pack program.bin into myos.img
+
+Report bugs to: https://github.com/shikaan/osle/issues
+OSle home page: <https://github.com/shikaan/osle>
+EOF
+  exit 0
 }
 
 print_usage() {
-  printf '%s\n    %s\n\n' "Usage:" "$NAME <path-to-binary> [osle-image-path]"
-  echo "Use \"$NAME --help\" for more information."
+  cat << EOF
+Usage: $NAME BINARY [IMAGE]
+Try '$NAME --help' for more information.
+EOF
   exit 1
 }
 
-if echo "$1" | grep -Eq '^(-h|--help)$'; then
-  print_info
-fi
+error() {
+  echo "$NAME: $1" >&2
+  print_usage
+}
 
-binary=$1
-osle=$2
+### MAIN
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      print_info
+      ;;
+    -v|--version)
+      echo "$NAME_LONG $VERSION"
+      exit 0
+      ;;
+    -*)
+      error "unknown option: $1"
+      ;;
+    *)
+      if [ -z "$binary" ]; then
+        binary="$1"
+      else
+        osle="$1"
+      fi
+      ;;
+  esac
+  shift
+done
 
 if [ -z "$osle" ]; then
   osle="osle.img"
 fi
 
 if [ ! -f "$osle" ]; then
-  echo "$NAME: unable to find OSle image at ${osle}"
-  print_usage
+  error "unable to find OSle image at ${osle}"
 fi
 
 if [ -z "$binary" ]; then
-  echo "$NAME: missing required binary argument"
-  print_usage
+  error "missing required binary argument"
 fi
 
 if [ ! -f "$binary" ]; then
-  echo "$NAME: unable to find binary at ${binary}"
-  print_usage
+  error "unable to find binary at ${binary}"
 fi
 
 BLOCK_SIZE=512
@@ -54,7 +88,7 @@ while [ "$block" -lt "$TOTAL_BLOCKS" ]; do
   # Extract the current chunk to check if it's empty
   dd if="$osle" of="$temp_file" bs=$BLOCK_SIZE skip=$block count=$FILE_BLOCKS 2>/dev/null
   
-  if [ "$(hexdump -v -e '/1 "%02X"' "$temp_file" | tr -d '0')" = "" ]; then
+  if [ "$(od -v -An -tx1 "$temp_file" | tr -d ' 0\n')" = "" ]; then
     dd if="$binary" of="$osle" bs=$BLOCK_SIZE seek=$block conv=notrunc
     rm "$temp_file"
     exit 0

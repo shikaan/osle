@@ -20,6 +20,10 @@ mov si, INFO
 mov cx, 0xFFFF
 call str_print
 
+mov si, RETURN
+mov cx, 0xFFFF
+call str_print
+
 mov ax, 0
 int 0x16
 int INT_RETURN

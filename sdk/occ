@@ -1,0 +1,128 @@
+#!/bin/sh
+set -e
+NAME="occ"
+NAME_LONG="occ (OSle C Compiler)"
+VERSION="v0.1.0"
+
+print_info() {
+  cat << EOF
+Usage: $NAME [OPTION]... FILE
+Compile OSle programs into binaries.
+
+Compile FILE into a binary that can be run in OSle.
+
+  -o, --output FILE  write output to FILE (default: filename.bin)
+  -h, --help         display this help and exit
+  -v, --version      output version information and exit
+
+Examples:
+  $NAME program.c              Compile program.c into program.bin
+  $NAME -o myapp.bin app.c     Compile app.c into myapp.bin
+  $NAME app.s                  Works with assembly files too
+
+Report bugs to: https://github.com/shikaan/osle/issues
+OSle home page: <https://github.com/shikaan/osle>
+EOF
+  exit 0
+}
+
+print_usage() {
+  cat << EOF
+Usage: $NAME [OPTION]... FILE
+Try '$NAME --help' for more information.
+EOF
+  exit 1
+}
+
+error() {
+  echo "$NAME: $1" >&2
+  print_usage
+}
+
+case "$(uname -s)" in
+  Linux)  CC=i686-linux-gnu-gcc; LD=i686-linux-gnu-ld ;;
+  *)      CC=i686-elf-gcc;       LD=i686-elf-ld       ;;
+esac
+
+### MAIN
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      print_info
+      ;;
+    -v|--version)
+      echo "$NAME_LONG $VERSION"
+      exit 0
+      ;;
+    -o|--output)
+      if [ -z "$2" ]; then
+        error "-o requires an argument"
+      fi
+      outfilepath="$2"
+      shift
+      ;;
+    -*)
+      error "unknown option: $1"
+      ;;
+    *)
+      infilepath="$1"
+      ;;
+  esac
+  shift
+done
+
+if [ -z "${infilepath}" ] || [ ! -f "${infilepath}" ]; then
+  error "unable to open ${infilepath}"
+fi
+
+inextension="${infilepath##*.}"
+infilename="$(basename "$infilepath" ".${inextension}")"
+infiledir="$(dirname "$infilepath")"
+obj="${infilename}.o"
+outfilepath=${outfilepath:-"${infiledir}/${infilename}.bin"}
+elfobj=""
+
+case "$inextension" in
+  c)
+    elfobj="elf-${obj}"
+    $CC -m16 -ffreestanding -fno-pie -nostdlib -fno-asynchronous-unwind-tables -c sdk/crt.c -o sdk/crt.o
+    $CC -m16 -ffreestanding -fno-pie -nostdlib -fno-asynchronous-unwind-tables -c "${infilepath}" -o "${elfobj}"
+    $LD -T sdk/osle.ld -o "${obj}" "${elfobj}" sdk/crt.o
+    ;;
+  s)
+    nasm -f bin -o "${obj}" "${infilepath}"
+    ;;
+  -*)
+    error "unknown extension: $1"
+    ;;
+esac
+
+
+if [ ! -f "${obj}" ]; then
+  error "compilation failed: check output for errors"
+fi
+
+# Package it as an OSle file
+
+# Ensure file name size is less than 21
+filepath=$(echo "${infilepath}" | cut -c -21)
+
+# Put file name in the header of the file
+printf '%s' "${infilename}" | dd bs=21 conv=sync of=header.bin conv=notrunc 2>/dev/null
+
+# Set the executable flag
+printf "\200" | dd of=header.bin count=1 bs=1 seek=21 conv=notrunc 2>/dev/null
+
+# Add the size to the header
+filesize=$(stat -c %s "${obj}" 2>/dev/null || stat -f %z "${obj}")
+low_byte=$(($filesize & 0xFF))
+high_byte=$((($filesize >> 8) & 0xFF))
+printf "\\$(printf '%03o' $low_byte)\\$(printf '%03o' $high_byte)"\
+  | dd of=header.bin count=20 bs=1 seek=22 conv=notrunc 2>/dev/null
+
+# Finally, add data to the file
+cat header.bin "${obj}" > "${outfilepath}"
+
+# Remove intermediate artifacts
+rm -f header.bin "${obj}" "${elfobj}"

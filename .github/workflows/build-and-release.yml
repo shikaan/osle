@@ -14,7 +14,7 @@ jobs:
 
     steps:
     - name: Set up dependencies
-      run: sudo apt-get install -y nasm
+      run: sudo apt-get install -y nasm gcc-i686-linux-gnu
 
     - name: Checkout code
       uses: actions/checkout@v3
