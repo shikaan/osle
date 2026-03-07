@@ -61,7 +61,8 @@ PROGRAMS: db "Programs:", 0x0a, 0x0d
           db "  - mv <source-path> <destination-path>: move file from source"
           db    " to destination", 0x0a, 0x0d
           db "  - rm <file-path>: delete a file", 0x0a, 0x0d
-          db "  - snake: launch a snake game", 0x0a, 0x0d, 0x0a, 0x0d, 0
+          db "  - touch <file-path>: create a file", 0x0a, 0x0d
+          db "  - tetris: launch a tetris game", 0x0a, 0x0d, 0x0a, 0x0d, 0
 
 INFO:     db "For any feedack please refer to "
           db "https://github.com/shikaan/osle/issues", 0x0a, 0x0d, 0
