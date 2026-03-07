@@ -4,6 +4,7 @@
 <head>
   <title>OSle - A tiny and mighty boot sector OS</title>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💾</text></svg>">
   <script src="https://unpkg.com/v86@0.5.43/build/libv86.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reseter.css/2.0.0/minireseter.min.css" integrity="sha512-26lCJWeu4qh1Kd3YpqH03s+Ju7qI9mqz48E8mPE/qIoucLUbkBx6oayTM+0T3mAdC1DdT1grtnFtJNwsB+8qzw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -40,10 +41,14 @@
       }
     }
 
+    a {
+      color: var(--primary-dark);
+    }
+
     section, header {
-      width: 40em;
+      max-width: 40em;
       margin: auto;
-      padding: var(--vspace-1) 0;
+      padding: var(--vspace-1);
     }
 
     header {
@@ -55,6 +60,9 @@
 
     #screen {
       text-align: center;
+      margin: auto;
+      overflow: hidden;
+      position: relative;
       & > div.rows {
         white-space: pre;
         font-family: monospace;
@@ -92,6 +100,9 @@
       background-color: var(--black);
       color: var(--white);
       text-align: center;
+      a {
+        color: var(--white);
+      }
     }
 
     a:visited {
@@ -113,7 +124,7 @@
     <small>A tiny and mighty boot sector OS</small>
   </header>
   <section class="links">
-    <a href="https://github.com/shikaan/osle">GitHub</a> | <a href="https://github.com/shikaan/osle/releases">Releases</a> | <a href="https://github.com/shikaan/osle/issues">Issues</a>  
+    <a href="https://github.com/shikaan/osle">GitHub</a> | <a href="https://github.com/shikaan/osle/releases">Releases</a> | <a href="https://github.com/shikaan/osle/issues">Issues</a>
   </section>
 
   <main id="screen">
@@ -138,14 +149,15 @@
         <li><code>more &lt;text-file&gt;</code> preview the content of a file</li>
         <li><code>mv &lt;source&gt; &lt;destination&gt;</code> change file's path from source to destination</li>
         <li><code>rm &lt;text-file&gt;</code> delete a file</li>
-        <li><code>snake</code> launch a snake game</li>
+        <li><code>tetris</code> launch a tetris game</li>
+        <li><code>touch &lt;file&gt;</code> create a new file</li>
       </ul>
     </p>
   </section>
 
   <section>
     <h2>What is this?</h2>
-    <p>OSle is a real-mode OS that fits in a 
+    <p>OSle is a real-mode OS that fits in a
       <a href="https://en.wikipedia.org/wiki/Boot_sector">boot sector</a>.
     </p>
     <p>
@@ -158,7 +170,7 @@
       <li><b>file system</b> read, write, and find files on the disk</li>
       <li><b>process management</b> cooperatively spawn processes</li>
       <li>
-        <b>userland software</b> comes with pre-built software and an SDK to 
+        <b>userland software</b> comes with pre-built software and an SDK to
         write your own
       </li>
     </ul>
@@ -169,19 +181,23 @@
     <p>
       OSle includes a tiny
       <a href="https://github.com/shikaan/osle/tree/main/sdk">Software Development Kit</a>
-      that includes definitions and a toolchain to create your own OSle programs.
+      that includes definitions and a toolchain to create your own OSle programs
+      in x86 assembly or C.
     </p>
 
     <p>
-      Follow the 
-      <a href="https://github.com/shikaan/osle/tree/main/tutorial">step-by-step tutorial</a> 
-      to get started and, whenever you are ready to run your code, just compile 
+      Follow the
+      <a href="https://github.com/shikaan/osle/tree/main/tutorial">step-by-step tutorial</a>
+      to get started and, whenever you are ready to run your code, just compile
       it and bundle it like this:
     </p>
 
     <pre>
 # compile your source code into a binary
-$ sdk/build my_program.s
+$ sdk/occ my_program.c
+
+# works with assembly files too
+$ sdk/occ my_program.s
 
 # bundle it with OSle
 $ sdk/pack my_program.bin</pre>
@@ -190,7 +206,7 @@ $ sdk/pack my_program.bin</pre>
   <section>
     <h2>Feedback and contributions</h2>
 
-    <p>For feedback and contrubtions guidelines, please refer to the 
+    <p>For feedback and contrubtions guidelines, please refer to the
       <a href="https://github.com/shikaan/osle">GitHub Repository</a>.
     </p>
   </section>
@@ -198,10 +214,10 @@ $ sdk/pack my_program.bin</pre>
   <footer>
     <p>made with ❤️ by <a href="https://github.com/shikaan">shikaan</a></p>
   </footer>
-   
+
   <script>
-    new V86({
-      wasm_path: "https://unpkg.com/v86@0.5.43/build/v86.wasm",
+    const emulator = new V86({
+      wasm_path: "https://unpkg.com/v86@0.5.199/build/v86.wasm",
       memory_size: 32 * 1024 * 1024,
       vga_memory_size: 2 * 1024 * 1024,
       screen: { container: document.getElementById("screen") },
@@ -215,7 +231,30 @@ $ sdk/pack my_program.bin</pre>
         url: 'osle.img'
       },
       autostart: true,
-    })
+    });
+
+    let initialHeight = 0;
+
+    emulator.add_listener("screen-set-size", function(args) {
+      const [, height] = args;
+      const container = document.getElementById("screen");
+      const rows = container.querySelector("div.rows");
+
+      if (!rows) return;
+
+      document.fonts.ready.then(() => requestAnimationFrame(() => {
+        if (!initialHeight) {
+          // Lock the container to the initial 80x25 size
+          initialHeight = rows.scrollHeight;
+          container.style.height = initialHeight + "px";
+          container.style.overflow = "hidden";
+        }
+        const scaleY = initialHeight / rows.scrollHeight;
+        rows.style.transform = scaleY < 1 ? `scaleY(${scaleY})` : "";
+        rows.style.transformOrigin = "left top";
+      }));
+    });
+
   </script>
   <script data-goatcounter="https://shikaan.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
