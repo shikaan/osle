@@ -44,6 +44,8 @@
 #define FS_DATA_SIZE 9192
 // Total size of a file block on disk (header + data).
 #define FS_BLOCK_SIZE FS_DATA_SIZE + FS_HEADER_SIZE
+// It gives the length of an array.
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
 // 8-bit unsigned integer.
 typedef unsigned char byte_t;

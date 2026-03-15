@@ -16,7 +16,7 @@ osle_test: osle fixtures/text.txt.bin test/fs.test.bin
 .PHONY: osle
 osle: osle.o \
 	bin/ed.bin bin/more.bin bin/rm.bin bin/mv.bin bin/help.bin \
-	bin/touch.bin bin/tetris.bin
+	bin/touch.bin bin/tetris.bin bin/echo.bin
 	dd if=/dev/zero of=osle.img bs=512 count=2880
 	dd if=osle.o of=osle.img bs=512 count=1 conv=notrunc
 	sdk/pack bin/ed.bin
@@ -26,6 +26,7 @@ osle: osle.o \
 	sdk/pack bin/help.bin
 	sdk/pack bin/touch.bin
 	sdk/pack bin/tetris.bin
+	sdk/pack bin/echo.bin
 
 .PHONY: run
 run:
